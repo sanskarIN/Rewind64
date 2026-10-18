@@ -11,9 +11,10 @@ Rewind64 is an experimental, local-first, open-source native program inspection 
 - CLI `--help`, `--version`, and `run [--steps N] PROGRAM [ARGS...]` commands. `N` is 1–64, default 1.
 - Launch targets using `fork`, `PTRACE_TRACEME`, and `execvp` (arguments are passed directly, without a shell).
 - Observe the post-`exec` stop; inspect all 16 x86-64 general-purpose registers, RIP, RFLAGS, and FS/GS base addresses via `PTRACE_GETREGS`; and perform **up to 64** `PTRACE_SINGLESTEP` operations requested by the CLI.
+- Compare the 20 displayed register fields before/after each successful instruction step, show changed 64-bit values and a change count; snapshots remain in debugger-local memory (no trace recording).
 - Continue and wait for the target to exit; report normal exit status or terminating signal, along with actual completed step count; forward subsequent application signals.
 - Request `PTRACE_O_EXITKILL` and kill/reap the child on detected debugger errors to reduce stranded tracee risk.
-- Linux NASM source, **Assembly-native fixtures**, Bash integration checks, and GitHub Actions CI configuration; **Python is not used**.
+- Linux NASM source, **Assembly-native fixtures**, Bash integration checks, and GitHub Actions CI on Ubuntu 22.04 and 24.04; **Python is not used**.
 
 ## Compatibility
 
@@ -49,17 +50,17 @@ Built executable: `build/rewind64`. A checksum-verified native Linux archive is 
 ./build/rewind64 run /path/to/your/authorized/program arg1 arg2
 ```
 
-The `run` command waits for an `exec` stop, prints initial general-purpose register values, RIP, RSP, RFLAGS and FS/GS base addresses, executes up to the requested number of instructions (default one), and prints a register snapshot after each completed step. It then continues execution, reporting the actual number of completed steps at termination. **It does not offer interactive stepping, breakpoints, memory reading, reverse execution, or trace recording.** Commands such as `attach`, `trace`, and `replay` report unsupported-command errors.
+The `run` command waits for an `exec` stop, prints initial general-purpose register values, RIP, RSP, RFLAGS and FS/GS base addresses, executes up to the requested number of instructions (default one), and prints a register snapshot **and register-value deltas** after each completed step. It then continues execution, reporting the actual number of completed steps at termination. **It does not offer interactive stepping, breakpoints, memory reading, reverse execution, or trace recording.** Commands such as `attach`, `trace`, and `replay` report unsupported-command errors.
 
 The debugger exits with the target's normal status (0–255) when possible, or `128 + signal` on signal termination. A debugger error returns 1; a CLI argument error returns 2. These can overlap a target's chosen exit status; structured result codes are planned. A target failing to execute prints a diagnostic and exits with status 127; the pre-exec child failure is not reported as a successful trace.
 
 ## Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for ABI notes and current module boundaries. At a glance: `src/cli/main.asm` handles commands; `src/registers/x86_64.asm` formats extended CPU state; `platforms/linux/debugger.asm` implements the Linux ptrace execution path; `tests/fixtures/` contains target executables; `tests/integration/` verifies CLI and process behavior. No other architecture or platform code exists yet.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for ABI notes and current module boundaries. At a glance: `src/cli/main.asm` handles commands; `src/registers/x86_64.asm` formats extended CPU state; `src/registers/delta.asm` compares successive CPU snapshots; `platforms/linux/debugger.asm` implements the Linux ptrace execution path; `tests/fixtures/` contains target executables; `tests/integration/` verifies CLI and process behavior. No other architecture or platform code exists yet.
 
 ## Roadmap
 
-1. **v0.1.0:** First experimental Linux process inspection prerelease; **v0.1.1:** bounded stepping and Python-free tests; **v0.1.2:** full register presentation, step accounting, and expanded Linux CI.
+1. **v0.1.0:** First experimental Linux process inspection prerelease; **v0.1.1:** bounded stepping and Python-free tests; **v0.1.2:** full register presentation, step accounting, and expanded Linux CI; **v0.1.3:** forward-only register deltas and lifecycle regression tests.
 2. **v0.2.0:** Investigate and implement a verified Windows x86-64 backend.
 3. **v0.3.0:** Investigate macOS Intel debugging APIs and entitlements.
 4. **v0.4.0:** Platform abstraction, memory inspection, breakpoint management, and interactive stepping.
