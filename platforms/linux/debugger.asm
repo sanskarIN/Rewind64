@@ -15,6 +15,7 @@ extern printf
 extern puts
 extern __errno_location
 extern print_registers
+extern print_register_changes
 
 %define PTRACE_TRACEME     0
 %define PTRACE_CONT        7
@@ -28,6 +29,7 @@ extern print_registers
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
 %define STATUS             (-24)
 %define SIGINFO            (-400)         ; 128-byte siginfo_t, non-overlapping
+%define PREVREGS           (-640)         ; prior 216-byte snapshot: -640..-425
 %define REGS               (-256)
 %define REG_RIP            (REGS + 128)
 %define REG_RSP            (REGS + 152)
@@ -52,11 +54,12 @@ section .rodata
 section .text
 ; debug_run(argv, step_limit) => target exit status, 1 on tracing error.
 ; step_limit is CLI-validated in the inclusive range 1..64.
-; Stack frame holds pid, status, and complete 216-byte x86_64 register block.
+; Stack frame holds pid, status, and two disjoint 216-byte register blocks.
+; Previous snapshot -640..-425, siginfo -400..-273, new regs -256..-41.
 debug_run:
     push rbp
     mov rbp, rsp
-    sub rsp, 416
+    sub rsp, 656
     mov [rbp-8], rdi              ; argv vector from CLI
     mov dword [rbp-264], esi      ; requested maximum steps
     mov dword [rbp-272], 0        ; completed steps
@@ -89,6 +92,7 @@ debug_run:
     js .regs_failed
     lea rdi, [rel msg_initial]
     call .print_regs
+    call .save_regs             ; persist previous state before stepping
 
 
 .step_loop:
@@ -126,6 +130,10 @@ debug_run:
     js .regs_failed
     lea rdi, [rel msg_step]
     call .print_regs
+    lea rdi, [rbp+PREVREGS]
+    lea rsi, [rbp+REGS]
+    call print_register_changes
+    call .save_regs             ; make current state the next baseline
     inc dword [rbp-272]
     mov eax, [rbp-272]
     cmp eax, [rbp-264]
@@ -235,6 +243,16 @@ debug_run:
     xor eax, eax
     call printf
     add rsp, 8
+    ret
+
+; A full 216-byte user_regs_struct is 27 qwords. This helper copies only
+; debugger-owned state, without allocating or relying on Python/C helpers.
+.save_regs:
+    lea rsi, [rbp+REGS]
+    lea rdi, [rbp+PREVREGS]
+    mov ecx, 27
+    cld
+    rep movsq
     ret
 
 ; Internal subroutines preserve the debug_run frame.
