@@ -25,6 +25,12 @@ build/rewind64: build/main.o build/debugger.o build/registers.o
 build/exit0.o: tests/fixtures/exit0.asm | build
 	$(NASM) $(NASMFLAGS) -o $@ $<
 
+build/register_fixture.o: tests/fixtures/registers.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/register_fixture: build/register_fixture.o
+	$(LD) -o $@ $<
+
 build/argv.o: tests/fixtures/argv.asm | build
 	$(NASM) $(NASMFLAGS) -o $@ $<
 
@@ -52,7 +58,7 @@ build/trap.o: tests/fixtures/trap.asm | build
 build/trap: build/trap.o
 	$(LD) -o $@ $<
 
-fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1
+fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture
 
 test: all fixtures
 	bash tests/integration/test_cli.sh
