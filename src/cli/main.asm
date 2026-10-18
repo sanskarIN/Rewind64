@@ -19,7 +19,7 @@ section .rodata
                     db '  rewind64 run [--steps N] PROGRAM [ARGS...]', 10
                     db '  N must be 1..64; default N=1.', 10
                     db 'Only Linux x86-64 run is implemented.', 0
-    version_text:   db 'Rewind64 v0.1.1-dev (Linux x86-64)', 0
+    version_text:   db 'Rewind64 v0.1.1-pre (Linux x86-64)', 0
     usage_error:    db 'Error: expected rewind64 run [--steps N] PROGRAM [ARGS...].', 0
     steps_error:    db 'Error: steps must be in range 1..64 (decimal digits only).', 0
     unknown_error:  db 'Error: unsupported command. See rewind64 --help.', 0
