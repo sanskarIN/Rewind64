@@ -1,5 +1,18 @@
 # Rewind64 development progress
 
+## v0.1.1 development — 2026-10-18
+
+- Next planned release: **v0.1.1 experimental prerelease** (Linux x86-64).
+- Added `run --steps N` for 1..64 forward instruction steps with repeated register output.
+- Fixed delivery of synthetic single-step SIGTRAP to the tracee; retained application-signal forwarding.
+- Added retry on EINTR for `waitpid`.
+- Removed `tests/integration/test_cli.py`; no Python source or runtime is used by this branch.
+- Added native Assembly fixtures `argv.asm` and `signal_usr1.asm`; Bash drives black-box integration checks.
+- Updated Make, CI, documentation, and release pipeline.
+- CI initially caught a real SIGTRAP regression, which was fixed. Verified a native NASM build and all test checks on https://github.com/sanskarIN/Rewind64/actions/runs/39095354136 .
+- Release remains experimental; no deterministic replay, reverse stepping, memory editing, attach, or verified cross-platform support.
+- Next: more ptrace fault-injection tests, multithread/process-lifecycle research, and structured exit diagnostics.
+
 ## Scope
 
 Phase 1, Linux x86-64. **Experimental v0.1.0 prerelease published:** https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.0
