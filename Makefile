@@ -61,7 +61,31 @@ build/trap.o: tests/fixtures/trap.asm | build
 build/trap: build/trap.o
 	$(LD) -o $@ $<
 
-fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture
+build/exit255.o: tests/fixtures/exit255.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/exit255: build/exit255.o
+	$(LD) -o $@ $<
+
+build/signal_term.o: tests/fixtures/signal_term.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/signal_term: build/signal_term.o
+	$(LD) -o $@ $<
+
+build/segv.o: tests/fixtures/segv.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/segv: build/segv.o
+	$(LD) -o $@ $<
+
+build/long_steps.o: tests/fixtures/long_steps.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/long_steps: build/long_steps.o
+	$(LD) -o $@ $<
+
+fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps
 
 test: all fixtures
 	bash tests/integration/test_cli.sh
