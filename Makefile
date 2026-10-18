@@ -16,7 +16,10 @@ build/main.o: src/cli/main.asm | build
 build/debugger.o: platforms/linux/debugger.asm | build
 	$(NASM) $(NASMFLAGS) -o $@ $<
 
-build/rewind64: build/main.o build/debugger.o
+build/registers.o: src/registers/x86_64.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/rewind64: build/main.o build/debugger.o build/registers.o
 	$(CC) $(CFLAGS) -o $@ $^
 
 build/exit0.o: tests/fixtures/exit0.asm | build
