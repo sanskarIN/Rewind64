@@ -59,7 +59,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N]'; }
-version() { assert_contains version 'v0.1.2-pre'; }
+version() { assert_contains version 'v0.1.3-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -68,6 +68,8 @@ zero() {
   assert_count zero '    GPR:' 2 &&
   assert_contains zero 'RFLAGS=0x' &&
   assert_contains zero 'FS_BASE=0x' &&
+  assert_contains zero 'Register changes: ' &&
+  assert_contains zero '    Changed RIP:' &&
   assert_contains zero 'Steps completed: 1 / 1' &&
   assert_contains zero 'Target exited with status 0'
 }
@@ -99,7 +101,33 @@ registers() {
   assert_contains registers 'R12=0x1234567890abcdef' &&
   assert_contains registers 'R13=0xfedcba0987654321' &&
   assert_contains registers 'RFLAGS=0x' &&
-  assert_contains registers 'Steps completed: 4 / 4'
+  assert_contains registers 'Steps completed: 4 / 4' &&
+  assert_count registers '    Changed RIP:' 4 &&
+  assert_contains registers '    Changed RAX:' &&
+  assert_contains registers '    Changed RBX:' &&
+  assert_contains registers '    Changed R12:' &&
+  assert_contains registers '    Changed R13:' &&
+  assert_count registers 'Register changes: 2' 4
+}
+
+exit255() {
+  assert_contains exit255 'Target exited with status 255' &&
+  assert_contains exit255 'Steps completed: 1 / 1'
+}
+term_signal() {
+  assert_contains term_signal 'Target terminated by signal 15' &&
+  assert_contains term_signal 'Steps completed: 2 / 2'
+}
+segfault() {
+  assert_contains segfault 'Target terminated by signal 11' &&
+  assert_contains segfault 'Steps completed: 1 / 5' &&
+  assert_count segfault '    Changed RIP:' 1
+}
+max_steps() {
+  assert_count max_steps 'After step:' 64 &&
+  assert_count max_steps '    Changed RIP:' 64 &&
+  assert_contains max_steps 'Steps completed: 64 / 64' &&
+  assert_contains max_steps 'Target exited with status 0'
 }
 invalid() { assert_contains invalid 'steps must be in range'; }
 
@@ -118,6 +146,10 @@ check usr1 138 "$BIN" run "$ROOT/build/signal_usr1"
 check step_trap 133 "$BIN" run --steps 5 "$ROOT/build/trap"
 check early_exit 0 "$BIN" run --steps 64 "$ROOT/build/exit0"
 check registers 0 "$BIN" run --steps 4 "$ROOT/build/register_fixture"
+check exit255 255 "$BIN" run "$ROOT/build/exit255"
+check term_signal 143 "$BIN" run --steps 2 "$ROOT/build/signal_term"
+check segfault 139 "$BIN" run --steps 5 "$ROOT/build/segv"
+check max_steps 0 "$BIN" run --steps 64 "$ROOT/build/long_steps"
 for bad in 0 -1 abc 65 99999999999 1x; do
   check invalid 2 "$BIN" run --steps "$bad" "$ROOT/build/exit0"
 done
