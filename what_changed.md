@@ -2,7 +2,7 @@
 
 ## Scope
 
-Phase 1, `v0.1.0-dev`, Linux x86-64 only. No public release created.
+Phase 1, Linux x86-64. **Experimental v0.1.0 prerelease published:** https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.0
 
 ## New source and tooling
 
@@ -19,7 +19,8 @@ Phase 1, `v0.1.0-dev`, Linux x86-64 only. No public release created.
 - **Native NASM CI passed on GitHub Actions** with successful assemble/link, integration testing, artifact checksum, and upload steps: https://github.com/sanskarIN/Rewind64/actions/runs/39094217690
 - Latest local GNU assembler adaptation: 8/8 tests passed; GitHub CI is authoritative for canonical NASM.
 - Windows/macOS and ARM64: not implemented, not tested.
-- No benchmark claims or binary artifacts published.
+- A native Linux x86-64 archive and SHA256SUMS.txt were published after the NASM prerelease workflow passed: https://github.com/sanskarIN/Rewind64/actions/runs/39094420276
+- No cross-platform binaries or unsupported benchmarks have been published.
 
 ## Limitations / next steps
 
@@ -27,4 +28,4 @@ Phase 1, `v0.1.0-dev`, Linux x86-64 only. No public release created.
 2. Review ABI assumptions, stack alignment, signal handling, and child cleanup under more fault conditions.
 3. Add full register reporting and opt-in repeated stepping; define reliable program exit/error distinctions.
 4. Study Windows/macOS designs only after the initial Linux foundation is healthy.
-5. Consider an **experimental** v0.1.0 prerelease only when release acceptance checks pass; do not label this stable.
+5. Treat v0.1.0 as an **experimental prerelease**, not stable; complete lifecycle hardening and broader platform validation before any stable designation.
