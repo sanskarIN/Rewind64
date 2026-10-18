@@ -77,6 +77,14 @@ triple() {
 }
 forward_args() { assert_contains forward_args 'Target exited with status 0'; }
 usr1() { assert_contains usr1 'Target terminated by signal 10'; }
+step_trap() {
+  assert_count step_trap 'After step:' 1 &&
+  assert_contains step_trap 'Target terminated by signal 5'
+}
+early_exit() {
+  assert_count early_exit 'After step:' 2 &&
+  assert_contains early_exit 'Target exited with status 0'
+}
 invalid() { assert_contains invalid 'steps must be in range'; }
 
 # Run tests directly to avoid interpreting executable arguments in a shell.
@@ -91,6 +99,8 @@ check missing_exec 127 "$BIN" run /definitely-not-a-real-rewind64-program
 check triple 0 "$BIN" run --steps 3 "$ROOT/build/argv" hello
 check forward_args 0 "$BIN" run --steps 2 "$ROOT/build/argv" hello
 check usr1 138 "$BIN" run "$ROOT/build/signal_usr1"
+check step_trap 133 "$BIN" run --steps 5 "$ROOT/build/trap"
+check early_exit 0 "$BIN" run --steps 64 "$ROOT/build/exit0"
 for bad in 0 -1 abc 65 99999999999 1x; do
   check invalid 2 "$BIN" run --steps "$bad" "$ROOT/build/exit0"
 done
