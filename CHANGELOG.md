@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.4 - 2026-10-18 (experimental prerelease)
+
+- Added `run [--steps N] [--changes-only] [--] PROGRAM [ARGS...]` with flags accepted in either order before the target and an explicit `--` delimiter.
+- Opt-in concise register output hides the repeated full CPU tables but retains initial/step headers, register changes and final step counts; full display remains the default.
+- Rejected duplicate command options and tightened error reporting for missing flags and target arguments.
+- Checked the initial traced exec-stop signal before attempting register inspection or single-stepping.
+- Added pure Assembly SIGILL, SIGFPE and exit-42 test fixtures. Expanded Bash regression checks to 36 tests on Ubuntu 22.04 and 24.04.
+- No Python source, Python build dependency, recording or reverse execution was added.
+
 ## v0.1.3 - 2026-10-18 (experimental prerelease)
 
 - Added a NASM register-delta engine comparing 20 displayed fields between adjacent successful instruction steps, printing previous and current 64-bit values.
