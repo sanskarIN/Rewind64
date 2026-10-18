@@ -88,7 +88,7 @@ check zero 0 "$BIN" run "$ROOT/build/exit0"
 check seven 7 "$BIN" run "$ROOT/build/exit7"
 check trap_signal 133 "$BIN" run "$ROOT/build/trap"
 check missing_exec 127 "$BIN" run /definitely-not-a-real-rewind64-program
-check triple 0 "$BIN" run --steps 3 "$ROOT/build/exit0"
+check triple 0 "$BIN" run --steps 3 "$ROOT/build/argv" hello
 check forward_args 0 "$BIN" run --steps 2 "$ROOT/build/argv" hello
 check usr1 138 "$BIN" run "$ROOT/build/signal_usr1"
 for bad in 0 -1 abc 65 99999999999 1x; do
