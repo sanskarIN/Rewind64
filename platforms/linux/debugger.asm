@@ -18,6 +18,7 @@ extern print_registers
 extern print_register_changes
 
 %define PTRACE_TRACEME     0
+%define PTRACE_PEEKTEXT    1
 %define PTRACE_CONT        7
 %define PTRACE_SINGLESTEP  9
 %define PTRACE_GETREGS     12
@@ -27,6 +28,7 @@ extern print_register_changes
 %define SIGKILL            9
 %define SIGTRAP            5
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
+%define TRAP_BRKPT         1              ; also used for syscall-step on Linux
 %define STATUS             (-24)
 %define SIGINFO            (-400)         ; 128-byte siginfo_t, non-overlapping
 %define PREVREGS           (-640)         ; prior 216-byte snapshot: -640..-425
@@ -124,8 +126,22 @@ debug_run:
     cmp rax, -1
     je .siginfo_failed
     cmp dword [rbp+SIGINFO+8], TRAP_TRACE
+    je .step_completed
+    cmp dword [rbp+SIGINFO+8], TRAP_BRKPT
     jne .unexpected_trap_code
-
+    ; On some Linux kernels single-stepping the SYSCALL opcode reports
+    ; TRAP_BRKPT instead of TRAP_TRACE. Only classify this as a synthetic
+    ; step when the *previous* RIP points to the SYSCALL instruction (0f05).
+    ; A user INT3 (cc) or generated SIGTRAP must still be delivered.
+    mov edi, PTRACE_PEEKTEXT
+    mov rsi, [rbp-16]
+    mov rdx, [rbp+PREVREGS+128]   ; RIP before PTRACE_SINGLESTEP
+    xor ecx, ecx
+    xor eax, eax
+    call ptrace
+    cmp ax, 0x050f              ; little-endian instruction bytes 0f 05
+    jne .unexpected_trap_code
+.step_completed:
     call .get_regs
     test eax, eax
     js .regs_failed
