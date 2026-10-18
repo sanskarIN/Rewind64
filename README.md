@@ -4,7 +4,7 @@
 
 Rewind64 is an experimental, local-first, open-source native program inspection and debugger project. Its executable debugger logic is written in **x86-64 Assembly**. The first implementation targets **Linux x86-64 only**. Windows, macOS, recording, historical state navigation, and deterministic replay are roadmap items, **not implemented features**.
 
-> **Current published release:** [v0.1.2 experimental prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.2), Linux x86-64 only. The new version includes full GPR inspection, step accounting, and two Ubuntu CI targets. No stable release or reversible execution is claimed. Debug only programs you own or have permission to debug. Recorded process state, once recording is implemented, may contain sensitive data.
+> **Current published release:** [v0.1.3 experimental prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.3), Linux x86-64 only. This version includes forward-only register-change reporting, additional signal and exit-code regressions, and Python-free checks on Ubuntu 22.04/24.04. No stable release or reversible execution is claimed. Debug only programs you own or have permission to debug. Recorded process state, once recording is implemented, may contain sensitive data.
 
 ## Implemented
 
@@ -37,7 +37,7 @@ make fixtures
 make test
 ```
 
-Built executable: `build/rewind64`. A checksum-verified native Linux archive is available on the [v0.1.2 release page](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.2). Build output is untracked. CI assembles canonical source with NASM, tests the result, and uploads a short-retention experimental binary on the [Actions page](https://github.com/sanskarIN/Rewind64/actions). Do not infer binary compatibility across OSes.
+Built executable: `build/rewind64`. A checksum-verified native Linux archive is available on the [v0.1.3 release page](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.3). Build output is untracked. CI assembles canonical source with NASM, tests the result, and uploads a short-retention experimental binary on the [Actions page](https://github.com/sanskarIN/Rewind64/actions). Do not infer binary compatibility across OSes.
 
 ## Usage
 
