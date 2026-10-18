@@ -20,8 +20,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y nasm
       - name: Assemble and link
-        run: make all fixtures
-      - name: Run integration tests
+        run: make clean && make all fixtures
+      - name: Run Python-free Assembly fixture integration tests
         run: make test
       - name: Record build artifact digest
         run: sha256sum build/rewind64
