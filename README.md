@@ -36,7 +36,7 @@ make fixtures
 make test
 ```
 
-Built executable: `build/rewind64`. Build output is untracked. CI assembles canonical source with NASM and tests the result. Do not infer binary compatibility across OSes.
+Built executable: `build/rewind64`. Build output is untracked. CI assembles canonical source with NASM, tests the result, and uploads a short-retention experimental binary on the [Actions page](https://github.com/sanskarIN/Rewind64/actions). Do not infer binary compatibility across OSes.
 
 ## Usage
 
