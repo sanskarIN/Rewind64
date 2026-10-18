@@ -1,5 +1,17 @@
 # Rewind64 development progress
 
+## v0.1.3 development — 2026-10-18
+
+- Release plan: **v0.1.3 experimental Linux x86-64 prerelease**, not stable.
+- Added `src/registers/delta.asm`, a NASM-only CPU register delta engine. Compares 20 displayed 64-bit fields between adjacent successful steps and shows names, previous/current values, and totals.
+- Maintains a previous 216-byte Linux x86-64 register snapshot in a separate non-overlapping Assembly stack buffer; **no execution trace, recording, or reverse execution**.
+- Added native Assembly fixtures `exit255.asm`, `signal_term.asm`, `segv.asm` and `long_steps.asm`. Expanded Bash integration regression suite to **24 cases**.
+- Diagnosed a Linux `PTRACE_SINGLESTEP` syscall edge case where a synthetic syscall stop reports `TRAP_BRKPT`. The debugger confirms the prior RIP contains the x86-64 `syscall` instruction through `PTRACE_PEEKTEXT` before treating it as a completed step. Program `INT3` signals remain forwarded.
+- Adjusted a test to accommodate legitimate differences in initial RFLAGS across Ubuntu versions rather than assuming all instructions produce exactly two register changes.
+- Native NASM and all **24 Python-free Bash integration tests passed on Ubuntu 22.04 and Ubuntu 24.04**: https://github.com/sanskarIN/Rewind64/actions/runs/39099963374 .
+- All executable debugging and register comparison logic remains Assembly. Python is not used or required.
+- Remaining: single-tracee scope, incomplete signal/thread lifecycle coverage, no replay, attach, breakpoints, or other OS binaries.
+
 ## v0.1.2 development — 2026-10-18
 
 - **Published:** [v0.1.2 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.2), not stable. Release workflow succeeded: https://github.com/sanskarIN/Rewind64/actions/runs/39097091563 .
