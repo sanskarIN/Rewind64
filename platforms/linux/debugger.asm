@@ -55,7 +55,8 @@ section .rodata
     err_stop:      db 'Error: child did not enter expected ptrace stop.', 0
 
 section .text
-; debug_run(argv, step_limit) => target exit status, 1 on tracing error.
+; debug_run(argv, step_limit, changes_only) => target status; 1 on tracing error.
+; changes_only affects display only; kernel state capture and delta logic unchanged.
 ; step_limit is CLI-validated in the inclusive range 1..64.
 ; Stack frame holds pid, status, and two disjoint 216-byte register blocks.
 ; Previous snapshot -640..-425, siginfo -400..-273, new regs -256..-41.
@@ -65,6 +66,7 @@ debug_run:
     sub rsp, 656
     mov [rbp-8], rdi              ; argv vector from CLI
     mov dword [rbp-264], esi      ; requested maximum steps
+    mov dword [rbp-40], edx       ; compact register display flag
     mov dword [rbp-272], 0        ; completed steps
     call fork
     test eax, eax
@@ -79,6 +81,13 @@ debug_run:
     and eax, 0xff
     cmp eax, 0x7f                 ; WIFSTOPPED(status)
     jne .not_stopped
+    ; TRACEME + exec generates an initial SIGTRAP stop. Do not attempt
+    ; to single-step an unrelated, unexpected signal-delivery stop.
+    mov eax, [rbp+STATUS]
+    shr eax, 8
+    and eax, 0xff
+    cmp eax, SIGTRAP
+    jne .wrong_stop
 
     ; EXITKILL prevents an orphaned traced child if the debugger crashes.
     mov edi, PTRACE_SETOPTIONS
@@ -328,8 +337,11 @@ debug_run:
     mov rcx, [rbp+REG_RSP]
     xor eax, eax
     call printf
-    lea rdi, [rbp+REGS]        ; complete Linux x86-64 register snapshot
+    cmp dword [rbp-40], 0         ; opt-in concise display
+    jne .skip_full_table
+    lea rdi, [rbp+REGS]           ; complete Linux x86-64 register snapshot
     call print_registers
+.skip_full_table:
     add rsp, 8
     ret
 
