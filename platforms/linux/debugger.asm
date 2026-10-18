@@ -20,10 +20,13 @@ extern __errno_location
 %define PTRACE_SINGLESTEP  9
 %define PTRACE_GETREGS     12
 %define PTRACE_SETOPTIONS  0x4200
+%define PTRACE_GETSIGINFO  0x4202
 %define PTRACE_O_EXITKILL  0x00100000
 %define SIGKILL            9
 %define SIGTRAP            5
+%define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
 %define STATUS             (-24)
+%define SIGINFO            (-400)         ; 128-byte siginfo_t, non-overlapping
 %define REGS               (-256)
 %define REG_RIP            (REGS + 128)
 %define REG_RSP            (REGS + 152)
@@ -40,6 +43,7 @@ section .rodata
     err_wait:      db 'waitpid', 0
     err_options:   db 'ptrace(SETOPTIONS)', 0
     err_regs:      db 'ptrace(GETREGS)', 0
+    err_siginfo:   db 'ptrace(GETSIGINFO)', 0
     err_step:      db 'ptrace(SINGLESTEP)', 0
     err_cont:      db 'ptrace(CONT)', 0
     err_stop:      db 'Error: child did not enter expected ptrace stop.', 0
@@ -51,7 +55,7 @@ section .text
 debug_run:
     push rbp
     mov rbp, rsp
-    sub rsp, 272
+    sub rsp, 416
     mov [rbp-8], rdi              ; argv vector from CLI
     mov dword [rbp-264], esi      ; requested maximum steps
     mov dword [rbp-272], 0        ; completed steps
@@ -108,6 +112,13 @@ debug_run:
     and eax, 0xff
     cmp eax, SIGTRAP
     jne .interrupted_step        ; do not kill the tracee for delivered signals
+    ; A breakpoint-generated SIGTRAP is not a single-step completion.
+    ; Distinguish TRAP_TRACE from TRAP_BRKPT before showing a snapshot.
+    call .get_siginfo
+    cmp rax, -1
+    je .siginfo_failed
+    cmp dword [rbp+SIGINFO+8], TRAP_TRACE
+    jne .interrupted_step
 
     call .get_regs
     test eax, eax
@@ -244,6 +255,17 @@ debug_run:
     call ptrace
     add rsp, 8
     ret
+; Linux siginfo_t has si_signo, si_errno, si_code at offsets 0,4,8.
+.get_siginfo:
+    sub rsp, 8
+    mov edi, PTRACE_GETSIGINFO
+    mov rsi, [rbp-16]
+    xor edx, edx
+    lea rcx, [rbp+SIGINFO]
+    xor eax, eax
+    call ptrace
+    add rsp, 8
+    ret
 .print_regs:
     sub rsp, 8
     mov rsi, [rbp-16]
@@ -274,6 +296,9 @@ debug_run:
     jmp .cleanup_errno
 .regs_failed:
     lea rdi, [rel err_regs]
+    jmp .cleanup_errno
+.siginfo_failed:
+    lea rdi, [rel err_siginfo]
     jmp .cleanup_errno
 .step_failed:
     lea rdi, [rel err_step]
