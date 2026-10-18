@@ -11,7 +11,7 @@ All executable debugger implementation in this milestone is Assembly in `src/cli
 1. `fork()` once; child requests `PTRACE_TRACEME` and calls `execvp` with the caller-provided argument vector.
 2. Parent `waitpid`s for the `exec` stop; requests `PTRACE_O_EXITKILL` before resuming the target.
 3. `PTRACE_GETREGS` captures the 216-byte Linux x86-64 `user_regs_struct`, reading RIP at offset 128, RSP at offset 152, RAX at 80, RBX at 40, RCX at 88, and RDX at 96.
-4. `PTRACE_SINGLESTEP` advances up to the user-requested number of instructions, bounded to 1..64, verifying normal single-step traps and capturing the registers after every completed step.
+4. `PTRACE_SINGLESTEP` advances up to the user-requested number of instructions, bounded to 1..64, verifying normal single-step traps with `PTRACE_GETSIGINFO` (`si_code == TRAP_TRACE`) and capturing the registers after every completed step. Program-generated SIGTRAP stops are forwarded rather than counted as completed steps.
 5. `PTRACE_CONT` resumes the target; the parent reports exit status or termination signal. Subsequent stops forward signals to the tracee, including application-generated SIGTRAP.
 6. Known debugger-error paths attempt to kill and reap the child. A target exiting or being signaled before the expected ptrace stop is reported as a process outcome; other unexpected process states produce a debugger failure.
 
