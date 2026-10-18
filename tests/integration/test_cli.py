@@ -38,6 +38,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('Initial stop:', result.stdout)
         self.assertIn('After step:', result.stdout)
+        self.assertEqual(result.stdout.count('Registers:'), 2)
         self.assertIn('Target exited with status 0', result.stdout)
 
     def test_exit7(self):
@@ -54,6 +55,7 @@ class CliTests(unittest.TestCase):
         result = run('run', '/definitely-not-a-real-executable-rewind64')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('execvp', result.stderr)
+        self.assertEqual(result.returncode, 127, result.stdout + result.stderr)
 
 
 if __name__ == '__main__':
