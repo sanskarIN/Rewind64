@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.2 - 2026-10-18 (experimental prerelease)
+
+- Added a dedicated NASM register-inspector module exposing the 16 x86-64 GPRs, RFLAGS, FS/GS bases, RIP and RSP across snapshots.
+- Reported actual completed steps versus the requested maximum on normal exit and signal termination.
+- Added a native Assembly fixture with known values for RAX, RBX, R12 and R13.
+- Expanded Bash integration checks to validate register values and step accounting.
+- Verified clean native NASM builds and Python-free tests on Ubuntu 22.04 and 24.04.
+
 ## v0.1.1 - 2026-10-18 (experimental prerelease)
 
 - Implemented bounded forward single-stepping (`run --steps N`, range 1..64) and repeated register snapshots.
