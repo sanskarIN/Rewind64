@@ -4,7 +4,7 @@
 
 Rewind64 is an experimental, local-first, open-source native program inspection and debugger project. Its executable debugger logic is written in **x86-64 Assembly**. The first implementation targets **Linux x86-64 only**. Windows, macOS, recording, historical state navigation, and deterministic replay are roadmap items, **not implemented features**.
 
-> **Development status:** `v0.1.0-dev`. This repository is **not** advertising a stable debugger or reversible execution. Debug only programs you own or have permission to debug. Recorded process state, once recording is implemented, may contain sensitive data.
+> **Release status:** [v0.1.0 experimental prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.0), Linux x86-64 only. The CLI intentionally identifies itself as `v0.1.0-dev`; this is **not** a stable debugger or reversible execution. Debug only programs you own or have permission to debug. Recorded process state, once recording is implemented, may contain sensitive data.
 
 ## Implemented
 
@@ -36,7 +36,7 @@ make fixtures
 make test
 ```
 
-Built executable: `build/rewind64`. Build output is untracked. CI assembles canonical source with NASM, tests the result, and uploads a short-retention experimental binary on the [Actions page](https://github.com/sanskarIN/Rewind64/actions). Do not infer binary compatibility across OSes.
+Built executable: `build/rewind64`. A checksum-verified experimental Linux archive is available on the [v0.1.0 release page](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.0). Build output is untracked. CI assembles canonical source with NASM, tests the result, and uploads a short-retention experimental binary on the [Actions page](https://github.com/sanskarIN/Rewind64/actions). Do not infer binary compatibility across OSes.
 
 ## Usage
 
