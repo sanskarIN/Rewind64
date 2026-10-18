@@ -22,6 +22,18 @@ build/rewind64: build/main.o build/debugger.o
 build/exit0.o: tests/fixtures/exit0.asm | build
 	$(NASM) $(NASMFLAGS) -o $@ $<
 
+build/argv.o: tests/fixtures/argv.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/argv: build/argv.o
+	$(LD) -o $@ $<
+
+build/signal_usr1.o: tests/fixtures/signal_usr1.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/signal_usr1: build/signal_usr1.o
+	$(LD) -o $@ $<
+
 build/exit7.o: tests/fixtures/exit7.asm | build
 	$(NASM) $(NASMFLAGS) -o $@ $<
 
@@ -37,10 +49,10 @@ build/trap.o: tests/fixtures/trap.asm | build
 build/trap: build/trap.o
 	$(LD) -o $@ $<
 
-fixtures: build/exit0 build/exit7 build/trap
+fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1
 
 test: all fixtures
-	python3 -m unittest discover -s tests/integration -v
+	bash tests/integration/test_cli.sh
 
 clean:
 	rm -rf build
