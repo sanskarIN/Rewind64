@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.1 - 2026-10-18 (experimental prerelease)
+
+- Implemented bounded forward single-stepping (`run --steps N`, range 1..64) and repeated register snapshots.
+- Fixed synthetic SIGTRAP forwarding after stepping, distinguished debugger traps from application traps using siginfo, and added waitpid EINTR retry.
+- Added Assembly fixtures testing argv forwarding and SIGUSR1 propagation.
+- Replaced and removed Python integration tests with Bash-driven checks of native Assembly targets.
+- Hardened clean-build CI and added pre-release documentation.
+
 ## v0.1.0 - 2026-10-18 (experimental prerelease)
 
 - Initial Linux x86-64 native CLI and NASM debugger source.
