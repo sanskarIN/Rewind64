@@ -1,5 +1,16 @@
 # Rewind64 development progress
 
+## v0.1.2 development — 2026-10-18
+
+- **Release target:** v0.1.2 experimental Linux x86-64 prerelease; not stable.
+- Added `src/registers/x86_64.asm` with an Assembly-only display of all 16 x86-64 general-purpose registers, RIP, RFLAGS and FS/GS base addresses from Linux `user_regs_struct`.
+- Updated `platforms/linux/debugger.asm` to call the register display module and report `Steps completed: actual / requested` on target exit/termination.
+- Added `tests/fixtures/registers.asm` with known RAX, RBX, R12 and R13 values; expanded Bash integration suite from 19 to **20 cases**.
+- `Makefile` now assembles the new register formatter and fixture.
+- Linux CI matrix now tests Ubuntu 22.04 and 24.04; both succeeded during PR validation: https://github.com/sanskarIN/Rewind64/actions/runs/39096876383 .
+- Python remains excluded from the source, build and test execution path.
+- The project still lacks interactive sessions, breakpoints, attach, execution recording, reverse stepping, deterministic replay and other OS backends. No claim of full signal/thread lifecycle correctness is made.
+
 ## v0.1.1 development — 2026-10-18
 
 - **Published v0.1.1 experimental Linux x86-64 prerelease:** https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.1 .
