@@ -14,6 +14,7 @@ extern perror
 extern printf
 extern puts
 extern __errno_location
+extern print_registers
 
 %define PTRACE_TRACEME     0
 %define PTRACE_CONT        7
@@ -34,7 +35,6 @@ extern __errno_location
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
     msg_step:      db 'After step:   pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_gprs:      db 'Registers:    RAX=0x%016lx RBX=0x%016lx RCX=0x%016lx RDX=0x%016lx', 10, 0
     msg_exit:      db 'Target exited with status %d', 10, 0
     msg_signal:    db 'Target terminated by signal %d', 10, 0
     err_fork:      db 'fork', 0
@@ -273,13 +273,8 @@ debug_run:
     mov rcx, [rbp+REG_RSP]
     xor eax, eax
     call printf
-    lea rdi, [rel msg_gprs]
-    mov rsi, [rbp+REGS+80]    ; rax
-    mov rdx, [rbp+REGS+40]    ; rbx
-    mov rcx, [rbp+REGS+88]    ; rcx
-    mov r8,  [rbp+REGS+96]    ; rdx
-    xor eax, eax
-    call printf
+    lea rdi, [rbp+REGS]        ; complete Linux x86-64 register snapshot
+    call print_registers
     add rsp, 8
     ret
 
