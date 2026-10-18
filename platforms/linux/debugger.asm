@@ -13,6 +13,7 @@ extern kill
 extern perror
 extern printf
 extern puts
+extern __errno_location
 
 %define PTRACE_TRACEME     0
 %define PTRACE_CONT        7
@@ -44,13 +45,16 @@ section .rodata
     err_stop:      db 'Error: child did not enter expected ptrace stop.', 0
 
 section .text
-; debug_run(argv) => exit status, 1 on tracing error, 128+signal on signal exit.
+; debug_run(argv, step_limit) => target exit status, 1 on tracing error.
+; step_limit is CLI-validated in the inclusive range 1..64.
 ; Stack frame holds pid, status, and complete 216-byte x86_64 register block.
 debug_run:
     push rbp
     mov rbp, rsp
     sub rsp, 272
     mov [rbp-8], rdi              ; argv vector from CLI
+    mov dword [rbp-264], esi      ; requested maximum steps
+    mov dword [rbp-272], 0        ; completed steps
     call fork
     test eax, eax
     js .fork_failed
@@ -81,6 +85,8 @@ debug_run:
     lea rdi, [rel msg_initial]
     call .print_regs
 
+
+.step_loop:
     mov edi, PTRACE_SINGLESTEP
     mov rsi, [rbp-16]
     xor edx, edx
@@ -101,15 +107,26 @@ debug_run:
     shr eax, 8
     and eax, 0xff
     cmp eax, SIGTRAP
-    jne .wrong_stop              ; only accept step-completion SIGTRAP
+    jne .interrupted_step        ; do not kill the tracee for delivered signals
 
     call .get_regs
     test eax, eax
     js .regs_failed
     lea rdi, [rel msg_step]
     call .print_regs
+    inc dword [rbp-272]
+    mov eax, [rbp-272]
+    cmp eax, [rbp-264]
+    jl .step_loop
 
     mov dword [rbp-36], 0                ; no signal to inject after stepping
+.interrupted_step:
+    ; Preserve a non-step signal stop rather than losing it or treating it
+    ; as a debugger error. Resume the tracee with that signal delivered.
+    mov eax, [rbp+STATUS]
+    shr eax, 8
+    and eax, 0xff
+    mov [rbp-36], eax
 .resume:
     mov edi, PTRACE_CONT
     mov rsi, [rbp-16]
@@ -200,7 +217,20 @@ debug_run:
     mov edi, [rbp-16]
     lea rsi, [rbp+STATUS]
     xor edx, edx
+.wait_again:
     call waitpid
+    cmp rax, -1
+    jne .wait_done
+    call __errno_location
+    cmp dword [rax], 4           ; EINTR
+    jne .wait_failed_errno
+    mov edi, [rbp-16]
+    lea rsi, [rbp+STATUS]
+    xor edx, edx
+    jmp .wait_again
+.wait_failed_errno:
+    mov rax, -1
+.wait_done:
     add rsp, 8
     ret
 .get_regs:
