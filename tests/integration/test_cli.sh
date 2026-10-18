@@ -59,13 +59,16 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N]'; }
-version() { assert_contains version 'v0.1.1-pre'; }
+version() { assert_contains version 'v0.1.2-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
   assert_contains zero 'Initial stop:' &&
   assert_count zero 'After step:' 1 &&
-  assert_contains zero 'Registers:' &&
+  assert_count zero '    GPR:' 2 &&
+  assert_contains zero 'RFLAGS=0x' &&
+  assert_contains zero 'FS_BASE=0x' &&
+  assert_contains zero 'Steps completed: 1 / 1' &&
   assert_contains zero 'Target exited with status 0'
 }
 seven() { assert_contains seven 'Target exited with status 7'; }
@@ -73,17 +76,30 @@ trap_signal() { assert_contains trap_signal 'Target terminated by signal 5'; }
 missing_exec() { assert_contains missing_exec 'execvp'; }
 triple() {
   assert_count triple 'After step:' 3 &&
+  assert_contains triple 'Steps completed: 3 / 3' &&
   assert_contains triple 'Target exited with status 0'
 }
 forward_args() { assert_contains forward_args 'Target exited with status 0'; }
 usr1() { assert_contains usr1 'Target terminated by signal 10'; }
 step_trap() {
   assert_count step_trap 'After step:' 1 &&
+  assert_contains step_trap 'Steps completed: 1 / 5' &&
   assert_contains step_trap 'Target terminated by signal 5'
 }
 early_exit() {
   assert_count early_exit 'After step:' 2 &&
+  assert_contains early_exit 'Steps completed: 2 / 64' &&
   assert_contains early_exit 'Target exited with status 0'
+}
+registers() {
+  assert_count registers '    GPR:' 5 &&
+  assert_count registers '    Bases:' 5 &&
+  assert_contains registers 'RAX=0x1122334455667788' &&
+  assert_contains registers 'RBX=0x8877665544332211' &&
+  assert_contains registers 'R12=0x1234567890abcdef' &&
+  assert_contains registers 'R13=0xfedcba0987654321' &&
+  assert_contains registers 'RFLAGS=0x' &&
+  assert_contains registers 'Steps completed: 4 / 4'
 }
 invalid() { assert_contains invalid 'steps must be in range'; }
 
@@ -101,6 +117,7 @@ check forward_args 0 "$BIN" run --steps 2 "$ROOT/build/argv" hello
 check usr1 138 "$BIN" run "$ROOT/build/signal_usr1"
 check step_trap 133 "$BIN" run --steps 5 "$ROOT/build/trap"
 check early_exit 0 "$BIN" run --steps 64 "$ROOT/build/exit0"
+check registers 0 "$BIN" run --steps 4 "$ROOT/build/register_fixture"
 for bad in 0 -1 abc 65 99999999999 1x; do
   check invalid 2 "$BIN" run --steps "$bad" "$ROOT/build/exit0"
 done
