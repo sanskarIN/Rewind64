@@ -37,6 +37,7 @@ section .rodata
     msg_step:      db 'After step:   pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
     msg_exit:      db 'Target exited with status %d', 10, 0
     msg_signal:    db 'Target terminated by signal %d', 10, 0
+    msg_steps:     db 'Steps completed: %d / %d', 10, 0
     err_fork:      db 'fork', 0
     err_trace:     db 'ptrace(TRACEME)', 0
     err_exec:      db 'execvp', 0
@@ -166,6 +167,7 @@ debug_run:
     mov esi, ecx
     xor eax, eax
     call printf
+    call .print_step_count
     mov eax, [rbp-32]
     add eax, 128
     jmp .done
@@ -197,6 +199,7 @@ debug_run:
     mov esi, [rbp-32]
     xor eax, eax
     call printf
+    call .print_step_count
     mov eax, [rbp-32]
     jmp .done
 
@@ -222,6 +225,17 @@ debug_run:
     call perror
     mov edi, 126
     call _exit
+
+; Reports completed, not requested, steps when a tracee exits early.
+.print_step_count:
+    sub rsp, 8
+    lea rdi, [rel msg_steps]
+    mov esi, [rbp-272]
+    mov edx, [rbp-264]
+    xor eax, eax
+    call printf
+    add rsp, 8
+    ret
 
 ; Internal subroutines preserve the debug_run frame.
 .wait_child:
