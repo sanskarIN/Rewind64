@@ -1,0 +1,85 @@
+# Rewind64
+
+**Explore execution. Trace every instruction. Understand the past.**
+
+Rewind64 is an experimental, local-first, open-source native program inspection and debugger project. Its executable debugger logic is written in **x86-64 Assembly**. The first implementation targets **Linux x86-64 only**. Windows, macOS, recording, historical state navigation, and deterministic replay are roadmap items, **not implemented features**.
+
+> **Development status:** `v0.1.0-dev`. This repository is **not** advertising a stable debugger or reversible execution. Debug only programs you own or have permission to debug. Recorded process state, once recording is implemented, may contain sensitive data.
+
+## Implemented
+
+- CLI `--help`, `--version`, and `run PROGRAM [ARGS...]` commands.
+- Launch targets using `fork`, `PTRACE_TRACEME`, and `execvp` (arguments are passed directly, without a shell).
+- Observe the post-`exec` stop, inspect x86-64 `RIP` and `RSP` via `PTRACE_GETREGS`, and perform **one** `PTRACE_SINGLESTEP`.
+- Continue and wait for the target to exit; report normal exit status or terminating signal; forward subsequent application signals.
+- Request `PTRACE_O_EXITKILL` and kill/reap the child on detected debugger errors to reduce stranded tracee risk.
+- Linux NASM source, fixtures, integration tests, and GitHub Actions CI configuration.
+
+## Compatibility
+
+| Platform | State |
+| --- | --- |
+| Linux x86-64, glibc, NASM ELF64 | Experimental initial implementation |
+| Windows x86-64 | Planned, not implemented |
+| macOS x86-64 | Planned, not implemented |
+| ARM64 / FreeBSD | Future investigation |
+
+Requires Linux permission for self-child tracing. Container seccomp and host security policies may deny tracing; Rewind64 does not bypass those restrictions. Linux ABI offsets are specifically for x86-64 `struct user_regs_struct`. The prototype uses libc for process-management wrapper calls, `printf`, and `execvp`; its debugger logic remains Assembly.
+
+## Build
+
+Requirements: Linux x86-64, `nasm`, `cc` (with glibc toolchain), `ld`, `make`; Python 3 for tests.
+
+```sh
+make
+make fixtures
+make test
+```
+
+Built executable: `build/rewind64`. Build output is untracked. CI assembles canonical source with NASM and tests the result. Do not infer binary compatibility across OSes.
+
+## Usage
+
+```sh
+./build/rewind64 --help
+./build/rewind64 --version
+./build/rewind64 run ./build/exit0
+./build/rewind64 run /path/to/your/authorized/program arg1 arg2
+```
+
+The `run` command waits for an `exec` stop, prints an initial register snapshot, executes one instruction and prints a second register snapshot, then continues execution. **It does not offer interactive stepping, breakpoints, memory reading, reverse execution, or trace recording.** Commands such as `attach`, `trace`, and `replay` report unsupported-command errors.
+
+The debugger exits with the target's normal status (0–255) when possible, or `128 + signal` on signal termination. A debugger error returns 1; a CLI argument error returns 2. These can overlap a target's chosen exit status; structured result codes are planned. A target failing to execute prints a diagnostic and the current prototype reports a debugger failure.
+
+## Architecture
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for ABI notes and current module boundaries. At a glance: `src/cli/main.asm` handles commands; `platforms/linux/debugger.asm` implements the Linux ptrace execution path; `tests/fixtures/` contains target executables; `tests/integration/` verifies CLI and process behavior. No other architecture or platform code exists yet.
+
+## Roadmap
+
+1. **v0.1.0:** Harden Linux process inspection, full register printing, lifecycle and fault regression tests.
+2. **v0.2.0:** Investigate and implement a verified Windows x86-64 backend.
+3. **v0.3.0:** Investigate macOS Intel debugging APIs and entitlements.
+4. **v0.4.0:** Platform abstraction, memory inspection, breakpoint management, and interactive stepping.
+5. **v0.5.0:** Versioned execution trace format with bounded readers/writers.
+6. **v0.6.0:** Historical trace inspection (distinct from true reverse execution).
+7. **v0.7.0+:** Investigate restricted deterministic replay with verified nondeterminism capture.
+
+Dates and versions are planning targets and not promises. A stable release requires a native NASM build, integration tests on the target OS, and a reviewed security and lifecycle audit.
+
+## Open source and contributions
+
+- License: [Boost Software License 1.0](LICENSE), already selected in this repository and retained here.
+- Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md).
+- Security guidance: [SECURITY.md](SECURITY.md).
+- Project progress: [what_changed.md](what_changed.md).
+
+Maintainer: [sanskarIN on GitHub](https://github.com/sanskarIN). Updates: [developer website](https://sanskarin.github.io), [contact](https://sanskarin.github.io/contact/), [X](https://x.com/SanskarCodes), [LinkedIn](https://linkedin.com/in/SanskarCodes).
+
+## Support Rewind64
+
+Development support is voluntary; no donation is required to use or contribute to Rewind64.
+
+- [Buy Me a Coffee](https://buymeacoffee.com/SanskarCodes)
+- [Razorpay](https://razorpay.me/@SanskarCodes)
+- [PayPal.me](https://paypal.me/SanskarCodes)
