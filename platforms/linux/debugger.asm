@@ -30,6 +30,7 @@ extern puts
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
     msg_step:      db 'After step:   pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
+    msg_gprs:      db 'Registers:    RAX=0x%016lx RBX=0x%016lx RCX=0x%016lx RDX=0x%016lx', 10, 0
     msg_exit:      db 'Target exited with status %d', 10, 0
     msg_signal:    db 'Target terminated by signal %d', 10, 0
     err_fork:      db 'fork', 0
@@ -62,7 +63,7 @@ debug_run:
     mov eax, [rbp+STATUS]
     and eax, 0xff
     cmp eax, 0x7f                 ; WIFSTOPPED(status)
-    jne .wrong_stop
+    jne .not_stopped
 
     ; EXITKILL prevents an orphaned traced child if the debugger crashes.
     mov edi, PTRACE_SETOPTIONS
@@ -95,7 +96,7 @@ debug_run:
     mov eax, [rbp+STATUS]
     and eax, 0xff
     cmp eax, 0x7f
-    jne .wrong_stop
+    jne .not_stopped
     mov eax, [rbp+STATUS]
     shr eax, 8
     and eax, 0xff
@@ -129,6 +130,7 @@ debug_run:
     je .exited
     cmp ecx, 0x7f
     je .stopped_again
+.signaled:
     ; WIFSIGNALED: low seven bits are terminating signal.
     mov [rbp-32], ecx
     lea rdi, [rel msg_signal]
@@ -138,6 +140,16 @@ debug_run:
     mov eax, [rbp-32]
     add eax, 128
     jmp .done
+
+.not_stopped:
+    mov eax, [rbp+STATUS]
+    mov ecx, eax
+    and ecx, 0x7f
+    test ecx, ecx
+    jz .exited
+    cmp ecx, 0x7f
+    jne .signaled
+    jmp .wrong_stop
 
 .stopped_again:
     shr eax, 8
@@ -206,6 +218,13 @@ debug_run:
     mov rsi, [rbp-16]
     mov rdx, [rbp+REG_RIP]
     mov rcx, [rbp+REG_RSP]
+    xor eax, eax
+    call printf
+    lea rdi, [rel msg_gprs]
+    mov rsi, [rbp+REGS+80]    ; rax
+    mov rdx, [rbp+REGS+40]    ; rbx
+    mov rcx, [rbp+REGS+88]    ; rcx
+    mov r8,  [rbp+REGS+96]    ; rdx
     xor eax, eax
     call printf
     add rsp, 8
