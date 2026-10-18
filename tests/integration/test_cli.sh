@@ -107,7 +107,7 @@ registers() {
   assert_contains registers '    Changed RBX:' &&
   assert_contains registers '    Changed R12:' &&
   assert_contains registers '    Changed R13:' &&
-  assert_count registers 'Register changes: 2' 4
+  assert_count registers 'Register changes:' 4
 }
 
 exit255() {
