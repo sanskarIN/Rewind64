@@ -119,7 +119,8 @@ debug_run:
     cmp eax, [rbp-264]
     jl .step_loop
 
-    mov dword [rbp-36], 0                ; no signal to inject after stepping
+    mov dword [rbp-36], 0                ; synthetic single-step SIGTRAP must not be delivered
+    jmp .resume
 .interrupted_step:
     ; Preserve a non-step signal stop rather than losing it or treating it
     ; as a debugger error. Resume the tracee with that signal delivered.
