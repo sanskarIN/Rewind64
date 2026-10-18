@@ -2,7 +2,7 @@
 
 ## v0.1.3 development — 2026-10-18
 
-- Release plan: **v0.1.3 experimental Linux x86-64 prerelease**, not stable.
+- **Published:** [v0.1.3 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.3), not stable. Release build, test, archive and checksum publication succeeded: https://github.com/sanskarIN/Rewind64/actions/runs/39100091815 .
 - Added `src/registers/delta.asm`, a NASM-only CPU register delta engine. Compares 20 displayed 64-bit fields between adjacent successful steps and shows names, previous/current values, and totals.
 - Maintains a previous 216-byte Linux x86-64 register snapshot in a separate non-overlapping Assembly stack buffer; **no execution trace, recording, or reverse execution**.
 - Added native Assembly fixtures `exit255.asm`, `signal_term.asm`, `segv.asm` and `long_steps.asm`. Expanded Bash integration regression suite to **24 cases**.
