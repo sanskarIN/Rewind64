@@ -40,6 +40,7 @@ section .rodata
     msg_exit:      db 'Target exited with status %d', 10, 0
     msg_signal:    db 'Target terminated by signal %d', 10, 0
     msg_steps:     db 'Steps completed: %d / %d', 10, 0
+    msg_other_trap: db 'Unexpected SIGTRAP si_code=%d during step', 10, 0
     err_fork:      db 'fork', 0
     err_trace:     db 'ptrace(TRACEME)', 0
     err_exec:      db 'execvp', 0
@@ -123,7 +124,7 @@ debug_run:
     cmp rax, -1
     je .siginfo_failed
     cmp dword [rbp+SIGINFO+8], TRAP_TRACE
-    jne .interrupted_step
+    jne .unexpected_trap_code
 
     call .get_regs
     test eax, eax
@@ -141,6 +142,12 @@ debug_run:
 
     mov dword [rbp-36], 0                ; synthetic single-step SIGTRAP must not be delivered
     jmp .resume
+.unexpected_trap_code:
+    lea rdi, [rel msg_other_trap]
+    mov esi, [rbp+SIGINFO+8]
+    xor eax, eax
+    call printf
+    jmp .interrupted_step
 .interrupted_step:
     ; Preserve a non-step signal stop rather than losing it or treating it
     ; as a debugger error. Resume the tracee with that signal delivered.
