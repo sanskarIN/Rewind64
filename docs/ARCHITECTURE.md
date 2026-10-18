@@ -10,10 +10,10 @@ All executable debugger implementation in this milestone is Assembly in `src/cli
 
 1. `fork()` once; child requests `PTRACE_TRACEME` and calls `execvp` with the caller-provided argument vector.
 2. Parent `waitpid`s for the `exec` stop; requests `PTRACE_O_EXITKILL` before resuming the target.
-3. `PTRACE_GETREGS` captures the 216-byte Linux x86-64 `user_regs_struct`, reading RIP at offset 128 and RSP at offset 152.
+3. `PTRACE_GETREGS` captures the 216-byte Linux x86-64 `user_regs_struct`, reading RIP at offset 128, RSP at offset 152, RAX at 80, RBX at 40, RCX at 88, and RDX at 96.
 4. `PTRACE_SINGLESTEP` advances one instruction, then the parent verifies a SIGTRAP stop and captures a second register snapshot.
 5. `PTRACE_CONT` resumes the target; the parent reports exit status or termination signal. Subsequent stops forward signals to the tracee, including application-generated SIGTRAP.
-6. Known debugger-error paths attempt to kill and reap the child. Unexpected process states terminate the debugger with a nonzero exit status.
+6. Known debugger-error paths attempt to kill and reap the child. A target exiting or being signaled before the expected ptrace stop is reported as a process outcome; other unexpected process states produce a debugger failure.
 
 Currently there is a **single** target process/session, a **single** sampled step, and no thread event management, disassembler, breakpoint insertion, `attach`, or memory explorer. Targets that fork children, create threads, or use complex trap/signal behavior are not fully supported. No recording and no replay are present. System security policies are never bypassed.
 
