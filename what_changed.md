@@ -2,12 +2,14 @@
 
 ## v0.1.2 development — 2026-10-18
 
-- **Release target:** v0.1.2 experimental Linux x86-64 prerelease; not stable.
+- **Published:** [v0.1.2 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.2), not stable. Release workflow succeeded: https://github.com/sanskarIN/Rewind64/actions/runs/39097091563 .
 - Added `src/registers/x86_64.asm` with an Assembly-only display of all 16 x86-64 general-purpose registers, RIP, RFLAGS and FS/GS base addresses from Linux `user_regs_struct`.
 - Updated `platforms/linux/debugger.asm` to call the register display module and report `Steps completed: actual / requested` on target exit/termination.
 - Added `tests/fixtures/registers.asm` with known RAX, RBX, R12 and R13 values; expanded Bash integration suite from 19 to **20 cases**.
 - `Makefile` now assembles the new register formatter and fixture.
 - Linux CI matrix now tests Ubuntu 22.04 and 24.04; both succeeded during PR validation: https://github.com/sanskarIN/Rewind64/actions/runs/39096876383 .
+- The merged `main` CI passed on both Ubuntu runners: https://github.com/sanskarIN/Rewind64/actions/runs/39097091550 .
+- Released artifact: `rewind64-v0.1.2-linux-x86_64.tar.gz` plus `SHA256SUMS.txt`. No Windows/macOS artifact was published.
 - Python remains excluded from the source, build and test execution path.
 - The project still lacks interactive sessions, breakpoints, attach, execution recording, reverse stepping, deterministic replay and other OS backends. No claim of full signal/thread lifecycle correctness is made.
 
@@ -34,7 +36,7 @@ Phase 1, Linux x86-64. **Experimental v0.1.0 prerelease published:** https://git
 - `src/cli/main.asm`: NASM CLI parser, version/help, `run` command.
 - `platforms/linux/debugger.asm`: process launch, ptrace register snapshots, single-step, signal forwarding, exit reporting, error cleanup.
 - `tests/fixtures/*.asm`: exit 0, exit 7, application SIGTRAP test programs.
-- `tests/integration/test_cli.py`: eight black-box integration tests, including normal exits, a failed exec, and signal forwarding.
+- Initial v0.1.0 used `tests/integration/test_cli.py` (eight tests); **this historical Python file was removed in v0.1.1** and is not present in the current project.
 - Expanded Linux register snapshots include RAX, RBX, RCX, RDX, RIP, and RSP. Early child exits are reported without attempting to kill an already-reaped process.
 - `Makefile`, `.gitignore`, Linux GitHub Actions CI, documentation and policies.
 
