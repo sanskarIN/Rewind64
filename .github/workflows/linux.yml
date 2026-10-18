@@ -1,0 +1,34 @@
+name: Linux x86-64 Assembly build and tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install NASM
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nasm
+      - name: Assemble and link
+        run: make all fixtures
+      - name: Run integration tests
+        run: make test
+      - name: Record build artifact digest
+        run: sha256sum build/rewind64
+      - name: Upload experimental Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: rewind64-linux-x86_64-dev
+          path: build/rewind64
+          if-no-files-found: error
+          retention-days: 7
