@@ -47,9 +47,9 @@ Built executable: `build/rewind64`. Build output is untracked. CI assembles cano
 ./build/rewind64 run /path/to/your/authorized/program arg1 arg2
 ```
 
-The `run` command waits for an `exec` stop, prints an initial register snapshot, executes one instruction and prints a second register snapshot, then continues execution. **It does not offer interactive stepping, breakpoints, memory reading, reverse execution, or trace recording.** Commands such as `attach`, `trace`, and `replay` report unsupported-command errors.
+The `run` command waits for an `exec` stop, prints initial RIP, RSP, RAX, RBX, RCX and RDX values, executes one instruction and prints a second register snapshot, then continues execution. **It does not offer interactive stepping, breakpoints, memory reading, reverse execution, or trace recording.** Commands such as `attach`, `trace`, and `replay` report unsupported-command errors.
 
-The debugger exits with the target's normal status (0–255) when possible, or `128 + signal` on signal termination. A debugger error returns 1; a CLI argument error returns 2. These can overlap a target's chosen exit status; structured result codes are planned. A target failing to execute prints a diagnostic and the current prototype reports a debugger failure.
+The debugger exits with the target's normal status (0–255) when possible, or `128 + signal` on signal termination. A debugger error returns 1; a CLI argument error returns 2. These can overlap a target's chosen exit status; structured result codes are planned. A target failing to execute prints a diagnostic and exits with status 127; the pre-exec child failure is not reported as a successful trace.
 
 ## Architecture
 
