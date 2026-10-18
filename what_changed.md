@@ -1,5 +1,16 @@
 # Rewind64 development progress
 
+## v0.1.4 development — 2026-10-18
+
+- **Target:** v0.1.4 experimental Linux x86-64 prerelease; no stable-release claim.
+- Implemented `run [--steps N] [--changes-only] [--] PROGRAM [ARGS...]` entirely in NASM Assembly, supporting flags in either order. `--` terminates option parsing, and duplicate flags return an explicit CLI error.
+- `--changes-only` retains RIP/stack-pointer stop headers, per-instruction register deltas and step counts, but suppresses large, repetitive CPU register tables. Full register collection and delta calculation continue unchanged.
+- Linux ptrace parent now verifies an initial exec-stop `SIGTRAP` before setting trace options and stepping.
+- Added three new NASM test fixtures: `illegal.asm` (SIGILL), `divzero.asm` (SIGFPE) and `exit42.asm` (status 42). Bash tests also exercise compact modes, flag ordering, duplicate flags, missing targets, and the `--` delimiter including a dash-prefixed executable name.
+- **36 native Assembly-fixture integration checks passed** on Ubuntu 22.04 and Ubuntu 24.04: https://github.com/sanskarIN/Rewind64/actions/runs/39110833220 .
+- No `.py` files or Python dependency in build and tests.
+- Limitations: Linux x86-64 only, one launched tracee, no memory explorer, attach, breakpoints, interactive stepping, trace recording, reverse execution, deterministic replay, or fully audited signal/thread/process lifecycle.
+
 ## v0.1.3 development — 2026-10-18
 
 - **Published:** [v0.1.3 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.3), not stable. Release build, test, archive and checksum publication succeeded: https://github.com/sanskarIN/Rewind64/actions/runs/39100091815 .
