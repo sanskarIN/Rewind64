@@ -59,7 +59,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N]'; }
-version() { assert_contains version 'v0.1.3-pre'; }
+version() { assert_contains version 'v0.1.4-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -130,6 +130,42 @@ max_steps() {
   assert_contains max_steps 'Target exited with status 0'
 }
 invalid() { assert_contains invalid 'steps must be in range'; }
+compact() {
+  assert_contains compact 'Initial stop:' &&
+  assert_count compact 'After step:' 3 &&
+  assert_count compact '    GPR:' 0 &&
+  assert_count compact '    Bases:' 0 &&
+  assert_count compact 'Register changes:' 3 &&
+  assert_contains compact '    Changed RIP:' &&
+  assert_contains compact 'Steps completed: 3 / 3'
+}
+compact_reverse() {
+  assert_contains compact_reverse 'Initial stop:' &&
+  assert_count compact_reverse 'After step:' 2 &&
+  assert_count compact_reverse '    GPR:' 0 &&
+  assert_count compact_reverse 'Register changes:' 2 &&
+  assert_contains compact_reverse 'Target exited with status 0'
+}
+compact_default() {
+  assert_contains compact_default 'Initial stop:' &&
+  assert_count compact_default 'After step:' 1 &&
+  assert_count compact_default '    GPR:' 0 &&
+  assert_contains compact_default 'Register changes:' &&
+  assert_contains compact_default 'Steps completed: 1 / 1'
+}
+duplicate() { assert_contains duplicate 'duplicate option'; }
+flag_usage() { assert_contains flag_usage 'Error:'; }
+illegal() {
+  assert_contains illegal 'Target terminated by signal 4' &&
+  assert_contains illegal 'Steps completed: 0 / 4'
+}
+divide_fault() {
+  assert_contains divide_fault 'Target terminated by signal 8' &&
+  assert_contains divide_fault 'Steps completed: 3 / 5'
+}
+exit42() { assert_contains exit42 'Target exited with status 42'; }
+dashed_target() { assert_contains dashed_target 'Target exited with status 42'; }
+
 
 # Run tests directly to avoid interpreting executable arguments in a shell.
 check help 0 "$BIN" --help
@@ -150,6 +186,19 @@ check exit255 255 "$BIN" run "$ROOT/build/exit255"
 check term_signal 143 "$BIN" run --steps 2 "$ROOT/build/signal_term"
 check segfault 139 "$BIN" run --steps 5 "$ROOT/build/segv"
 check max_steps 0 "$BIN" run --steps 64 "$ROOT/build/long_steps"
+check compact 0 "$BIN" run --steps 3 --changes-only "$ROOT/build/long_steps"
+check compact_reverse 0 "$BIN" run --changes-only --steps 2 "$ROOT/build/argv" hello
+check compact_default 0 "$BIN" run --changes-only "$ROOT/build/exit0"
+check duplicate 2 "$BIN" run --changes-only --changes-only "$ROOT/build/exit0"
+check duplicate 2 "$BIN" run --steps 2 --steps 3 "$ROOT/build/exit0"
+check flag_usage 2 "$BIN" run --changes-only
+check flag_usage 2 "$BIN" run --
+check flag_usage 2 "$BIN" run --steps 3
+check illegal 132 "$BIN" run --steps 4 "$ROOT/build/illegal"
+check divide_fault 136 "$BIN" run --steps 5 "$ROOT/build/divzero"
+check exit42 42 "$BIN" run -- "$ROOT/build/exit42"
+cp -- "$ROOT/build/exit42" "$tmp/--dash-program"
+PATH="$tmp:$PATH" check dashed_target 42 "$BIN" run -- --dash-program
 for bad in 0 -1 abc 65 99999999999 1x; do
   check invalid 2 "$BIN" run --steps "$bad" "$ROOT/build/exit0"
 done
