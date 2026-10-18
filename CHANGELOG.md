@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.3 - 2026-10-18 (experimental prerelease)
+
+- Added a NASM register-delta engine comparing 20 displayed fields between adjacent successful instruction steps, printing previous and current 64-bit values.
+- Reserved a second complete 216-byte Linux register buffer within the debugger's stack frame; no trace storage or reverse execution is implemented.
+- Extended black-box Bash tests and native Assembly fixtures for SIGTERM, SIGSEGV during stepping, exit status 255, and the 64-step upper bound.
+- Distinguished syscall single-step traps from application INT3 on Linux where syscall stepping reports `TRAP_BRKPT`.
+- Retained Python-free NASM builds and integration checks on Ubuntu 22.04 and 24.04.
+
 ## v0.1.2 - 2026-10-18 (experimental prerelease)
 
 - Added a dedicated NASM register-inspector module exposing the 16 x86-64 GPRs, RFLAGS, FS/GS bases, RIP and RSP across snapshots.
