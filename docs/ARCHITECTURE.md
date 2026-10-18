@@ -4,16 +4,17 @@
 
 `main` selects exactly three supported CLI operations: `--help`, `--version`, and `run`. `debug_run` accepts a null-terminated `argv` vector and is available only in the Linux/x86-64 build.
 
-All executable debugger implementation in this milestone is Assembly in `src/cli/main.asm`, `platforms/linux/debugger.asm`, and `src/registers/x86_64.asm`. The black-box test runner is Bash orchestration using native Assembly test fixtures; **Python is not required or used**. `Makefile` describes assembly and link steps. The program uses libc as an OS/API wrapper layer; no high-level language source file implements debugging logic.
+All executable debugger implementation in this milestone is Assembly in `src/cli/main.asm`, `platforms/linux/debugger.asm`, `src/registers/x86_64.asm`, and `src/registers/delta.asm`. The black-box test runner is Bash orchestration using native Assembly test fixtures; **Python is not required or used**. `Makefile` describes assembly and link steps. The program uses libc as an OS/API wrapper layer; no high-level language source file implements debugging logic.
 
 ## Debugger state machine
 
 1. `fork()` once; child requests `PTRACE_TRACEME` and calls `execvp` with the caller-provided argument vector.
 2. Parent `waitpid`s for the `exec` stop; requests `PTRACE_O_EXITKILL` before resuming the target.
 3. `PTRACE_GETREGS` captures the 216-byte Linux x86-64 `user_regs_struct`. `src/registers/x86_64.asm` prints general-purpose registers (RAX, RBX, RCX, RDX, RSI, RDI, RBP, R8–R15), RFLAGS, FS_BASE and GS_BASE. The Linux backend prints RIP and RSP. This module is architecture-specific, not a generic register layout for other operating systems.
-4. `PTRACE_SINGLESTEP` advances up to the user-requested number of instructions, bounded to 1..64, verifying normal single-step traps with `PTRACE_GETSIGINFO` (`si_code == TRAP_TRACE`) and capturing the registers after every completed step. Program-generated SIGTRAP stops are forwarded rather than counted as completed steps.
-5. `PTRACE_CONT` resumes the target; the parent reports exit status or termination signal and prints the completed/attempted instruction-step count. Subsequent stops forward signals to the tracee, including application-generated SIGTRAP.
-6. Known debugger-error paths attempt to kill and reap the child. A target exiting or being signaled before the expected ptrace stop is reported as a process outcome; other unexpected process states produce a debugger failure.
+4. `PTRACE_SINGLESTEP` advances up to 64 requested instructions. `PTRACE_GETSIGINFO` classifies trace-step traps (`TRAP_TRACE`); where Linux reports `TRAP_BRKPT` while stepping a `syscall`, `PTRACE_PEEKTEXT` verifies the previous RIP contains the `0f 05` opcode. Application-generated `SIGTRAP`/`INT3` remains forwarded rather than counted as a step. The current register snapshot is captured after each confirmed completed step.
+5. Two 216-byte register buffers are reserved at non-overlapping offsets in the Linux debugger's stack frame, one for the previous step and one for current state. `src/registers/delta.asm` compares 20 displayed register fields, prints only changed values, then the debugger copies the current snapshot into the previous buffer for the next step. **No snapshots are saved to disk, and this is not reverse execution.**
+6. `PTRACE_CONT` resumes the target; the parent reports exit status or termination signal and prints the completed/attempted instruction-step count. Subsequent stops forward signals to the tracee, including application-generated SIGTRAP.
+7. Known debugger-error paths attempt to kill and reap the child. A target exiting or being signaled before the expected ptrace stop is reported as a process outcome; other unexpected process states produce a debugger failure.
 
 Currently there is a **single** target process/session, up to 64 sampled steps, and no thread event management, disassembler, breakpoint insertion, `attach`, or memory explorer. Targets that fork children, create threads, or use complex trap/signal behavior are not fully supported. No recording and no replay are present. System security policies are never bypassed.
 
@@ -27,7 +28,7 @@ Currently there is a **single** target process/session, up to 64 sampled steps, 
 
 ## Reliability / planned hardening
 
-- The waitpid helper retries on EINTR; more thorough status/signal event classification still needs testing.
+- The waitpid helper retries on EINTR. Expanded Assembly fixtures exercise SIGTERM, SIGSEGV, SIGTRAP, exit 255 and the 64-step bound, but more lifecycle and syscall variants remain to be tested.
 - Explicit multi-thread/process follow and stateful interactive sessions are not implemented.
 - `PTRACE_O_EXITKILL` reduces orphaned debuggees on debugger crashes but does not replace thorough lifecycle cleanup testing.
 - Target exit statuses overlap the debugger's own error codes; machine-readable status separation is future work.
