@@ -10,7 +10,11 @@ permissions:
 
 jobs:
   linux-x86_64:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - name: Check out source
@@ -28,7 +32,7 @@ jobs:
       - name: Upload experimental Linux binary
         uses: actions/upload-artifact@v4
         with:
-          name: rewind64-linux-x86_64-dev
+          name: rewind64-linux-x86_64-${{ matrix.os }}-dev
           path: build/rewind64
           if-no-files-found: error
           retention-days: 7
