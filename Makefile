@@ -85,7 +85,25 @@ build/long_steps.o: tests/fixtures/long_steps.asm | build
 build/long_steps: build/long_steps.o
 	$(LD) -o $@ $<
 
-fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps
+build/illegal.o: tests/fixtures/illegal.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/illegal: build/illegal.o
+	$(LD) -o $@ $<
+
+build/divzero.o: tests/fixtures/divzero.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/divzero: build/divzero.o
+	$(LD) -o $@ $<
+
+build/exit42.o: tests/fixtures/exit42.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/exit42: build/exit42.o
+	$(LD) -o $@ $<
+
+fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps build/illegal build/divzero build/exit42
 
 test: all fixtures
 	bash tests/integration/test_cli.sh
