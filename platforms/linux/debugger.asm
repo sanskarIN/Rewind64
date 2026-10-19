@@ -42,6 +42,7 @@ extern stdout
 %define SESSION_MODE       (-680)        ; dword interactive mode from CLI
 %define SESSION_RETURN     (-684)        ; dword return after cleanup; 0 for quit
 %define SESSION_STEPPING   (-688)        ; dword: pending interactive single-step request
+%define INJECTED_SIGNAL    (-692)        ; dword: signal used by last ptrace resume
 %define SESSION_BUFFER     (-832)        ; 64-byte input buffer, -832..-769
 %define SESSION_BUF_SIZE    64
 %define SIGKILL            9
@@ -113,7 +114,7 @@ section .text
 ; Stack frame holds pid, status, and two disjoint 216-byte register blocks.
 ; Previous snapshot -640..-425, siginfo -400..-273, new regs -256..-41.
 ; Event payload at -664..-657 is distinct from cleanup counters and CPU state.
-; Prompt control at -688..-677, text input at -832..-769.
+; Prompt control at -692..-677, text input at -832..-769.
 debug_run:
     push rbp
     mov rbp, rsp
@@ -183,6 +184,7 @@ debug_run:
     je .issue_step
     mov ecx, [rbp-36]
 .issue_step:
+    mov dword [rbp+INJECTED_SIGNAL], ecx
     mov edi, PTRACE_SINGLESTEP
     mov rsi, [rbp-16]
     xor edx, edx
@@ -190,6 +192,10 @@ debug_run:
     call ptrace
     cmp rax, -1
     je .step_failed
+    cmp dword [rbp+INJECTED_SIGNAL], 0
+    je .step_no_signal
+    inc dword [rbp+SIGNAL_STOPS]
+.step_no_signal:
     mov dword [rbp-36], 0       ; consumed by a successful resume request
 
     call .wait_child
@@ -398,10 +404,16 @@ debug_run:
     mov rsi, [rbp-16]
     xor edx, edx
     mov ecx, [rbp-36]                 ; reinject unrelated signals
+    mov dword [rbp+INJECTED_SIGNAL], ecx
     xor eax, eax
     call ptrace
     cmp rax, -1
     je .cont_failed
+    cmp dword [rbp+INJECTED_SIGNAL], 0
+    je .resume_no_signal
+    inc dword [rbp+SIGNAL_STOPS]
+.resume_no_signal:
+    mov dword [rbp-36], 0             ; successfully submitted signal
 
     call .wait_child
     test eax, eax
@@ -480,6 +492,7 @@ debug_run:
     xor eax, eax
     call printf
     mov dword [rbp-36], 0
+    mov dword [rbp+SESSION_STEPPING], 0   ; event path resumes automatically
     jmp .resume
 
 .exited:
@@ -522,7 +535,9 @@ debug_run:
 ; The count is observational, not a per-signal-handling guarantee.
 .report_signal_stop:
     sub rsp, 8
-    inc dword [rbp+SIGNAL_STOPS]
+    ; Count successful nonzero-signal ptrace resumes instead of stops:
+    ; an interactive user may inspect a pending stop and quit without
+    ; ever forwarding that signal to the tracee.
     lea rdi, [rel msg_signal_stop]
     mov esi, [rbp-36]
     mov edx, [rbp+SIGINFO+8]      ; signed si_code; e.g. SI_USER=0, SI_TKILL=-6
