@@ -616,21 +616,21 @@ printf 'code\ns\nstack\nq\n' > "$tmp/session-stack-with-code"
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
 illegal_entry="$(nm -n "$ROOT/build/illegal" | awk '$3 == "_start" {print $1; exit}')"
 if [[ ! "$memory_base" =~ ^[[:xdigit:]]{1,16}$ || ! "$illegal_entry" =~ ^[[:xdigit:]]{1,16}$ ]]; then
-  printf 'Missing valid NASM fixture symbols for memory tests\\n' >&2
+  printf 'Missing valid NASM fixture symbols for memory tests\n' >&2
   exit 1
 fi
 printf -v memory_second '%016x' "$((16#$memory_base + 8))"
 memory_upper="$(printf '%s' "$memory_base" | tr 'abcdef' 'ABCDEF')"
-printf 'mem 0x%s\\nquit\\n' "$memory_base" > "$tmp/memory-word"
-printf 'm 0x%s\\nquit\\n' "$memory_second" > "$tmp/memory-all-ones"
-printf 'mem 0X%s\\nquit\\n' "$memory_upper" > "$tmp/memory-uppercase"
-printf 'step\\nmem 0x%s\\nm 0x%s\\nquit\\n' "$memory_base" "$memory_second" > "$tmp/memory-repeated"
-printf 'mem 0x0\\nstatus\\nquit\\n' > "$tmp/memory-unmapped"
-printf 'mem 0xffffffffffffffff\\nquit\\n' > "$tmp/memory-high-unmapped"
-printf 'mem 0x\\nmem 0xG\\nmem 0x1234567890abcdef0\\nmem -1\\nm 0x1z\\nmem 0x1  \\nmem 1234\\nm 0x\\nquit\\n' > "$tmp/memory-invalid"
-printf 'step\\nmem 0x%s\\nstatus\\nquit\\n' "$illegal_entry" > "$tmp/memory-signal"
-printf 'mem 0x%s\\ncontinue\\n' "$memory_base" > "$tmp/memory-compact"
-printf 'code\\nmem 0x%s\\nstack\\nquit\\n' "$memory_base" > "$tmp/memory-combo"
+printf 'mem 0x%s\nquit\n' "$memory_base" > "$tmp/memory-word"
+printf 'm 0x%s\nquit\n' "$memory_second" > "$tmp/memory-all-ones"
+printf 'mem 0X%s\nquit\n' "$memory_upper" > "$tmp/memory-uppercase"
+printf 'step\nmem 0x%s\nm 0x%s\nquit\n' "$memory_base" "$memory_second" > "$tmp/memory-repeated"
+printf 'mem 0x0\nstatus\nquit\n' > "$tmp/memory-unmapped"
+printf 'mem 0xffffffffffffffff\nquit\n' > "$tmp/memory-high-unmapped"
+printf 'mem 0x\nmem 0xG\nmem 0x1234567890abcdef0\nmem -1\nm 0x1z\nmem 0x1  \nmem 1234\nm 0x\nquit\n' > "$tmp/memory-invalid"
+printf 'step\nmem 0x%s\nstatus\nquit\n' "$illegal_entry" > "$tmp/memory-signal"
+printf 'mem 0x%s\ncontinue\n' "$memory_base" > "$tmp/memory-compact"
+printf 'code\nmem 0x%s\nstack\nquit\n' "$memory_base" > "$tmp/memory-combo"
 
 check help 0 "$BIN" --help
 check version 0 "$BIN" --version
