@@ -41,6 +41,7 @@ extern stdout
 %define EVENT_MESSAGE      (-664)        ; qword event payload; non-overlapping
 %define SESSION_MODE       (-680)        ; dword interactive mode from CLI
 %define SESSION_RETURN     (-684)        ; dword return after cleanup; 0 for quit
+%define SESSION_STEPPING   (-688)        ; dword: pending interactive single-step request
 %define SESSION_BUFFER     (-832)        ; 64-byte input buffer, -832..-769
 %define SESSION_BUF_SIZE    64
 %define SIGKILL            9
@@ -57,18 +58,22 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step | regs | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step | regs | status | continue | help | quit', 0
+    msg_session_status: db 'Session status: pid=%ld steps=%u pending_signal=%u', 10, 0
+    msg_pending_signal: db 'Interactive signal stop: signal %u pending; choose step, continue or quit.', 10, 0
     msg_session_prompt: db 'rewind64> ', 0
     msg_session_unknown: db 'Unknown session command. Type help.', 0
     msg_session_quit: db 'Interactive session ended; tracee terminated and reaped.', 0
     msg_session_steps: db 'Interactive steps completed: %u', 10, 0
     cmd_step: db 'step', 10, 0
     cmd_regs: db 'regs', 10, 0
+    cmd_status: db 'status', 10, 0
     cmd_continue: db 'continue', 10, 0
     cmd_quit: db 'quit', 10, 0
     cmd_help: db 'help', 10, 0
     cmd_short_step: db 's', 10, 0
     cmd_short_regs: db 'r', 10, 0
+    cmd_short_status: db 'i', 10, 0
     cmd_short_continue: db 'c', 10, 0
     cmd_short_quit: db 'q', 10, 0
     msg_step:      db 'After step:   pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
@@ -108,7 +113,7 @@ section .text
 ; Stack frame holds pid, status, and two disjoint 216-byte register blocks.
 ; Previous snapshot -640..-425, siginfo -400..-273, new regs -256..-41.
 ; Event payload at -664..-657 is distinct from cleanup counters and CPU state.
-; Prompt control at -684..-677, text input at -832..-769.
+; Prompt control at -688..-677, text input at -832..-769.
 debug_run:
     push rbp
     mov rbp, rsp
@@ -118,6 +123,8 @@ debug_run:
     mov dword [rbp-40], edx       ; compact register display flag
     mov dword [rbp+SESSION_MODE], ecx
     mov dword [rbp+SESSION_RETURN], 1
+    mov dword [rbp+SESSION_STEPPING], 0
+    mov dword [rbp-36], 0         ; no pending tracee signal initially
     mov dword [rbp-272], 0        ; completed steps
     mov dword [rbp+SIGNAL_STOPS], 0 ; observed signal-delivery stops
     mov dword [rbp+EXEC_EVENTS], 0
@@ -169,14 +176,21 @@ debug_run:
     jmp .resume
 
 .step_loop:
+    ; A user-initiated step from a signal-delivery stop must inject the
+    ; signal exactly once. Bounded automatic stepping has no pending signal.
+    xor ecx, ecx
+    cmp dword [rbp+SESSION_MODE], 0
+    je .issue_step
+    mov ecx, [rbp-36]
+.issue_step:
     mov edi, PTRACE_SINGLESTEP
     mov rsi, [rbp-16]
     xor edx, edx
-    xor ecx, ecx
     xor eax, eax
     call ptrace
     cmp rax, -1
     je .step_failed
+    mov dword [rbp-36], 0       ; consumed by a successful resume request
 
     call .wait_child
     test eax, eax
@@ -229,7 +243,10 @@ debug_run:
     call .save_regs             ; make current state the next baseline
     inc dword [rbp-272]
     cmp dword [rbp+SESSION_MODE], 0
-    jne .session_prompt
+    je .bounded_step_check
+    mov dword [rbp+SESSION_STEPPING], 0
+    jmp .session_prompt
+.bounded_step_check:
     mov eax, [rbp-272]
     cmp eax, [rbp-264]
     jl .step_loop
@@ -255,12 +272,12 @@ debug_run:
     lea rsi, [rel cmd_step]
     call strcmp
     test eax, eax
-    jz .step_loop
+    jz .session_step
     lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_short_step]
     call strcmp
     test eax, eax
-    jz .step_loop
+    jz .session_step
     lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_regs]
     call strcmp
@@ -271,6 +288,16 @@ debug_run:
     call strcmp
     test eax, eax
     jz .session_regs
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_status]
+    call strcmp
+    test eax, eax
+    jz .session_status
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_status]
+    call strcmp
+    test eax, eax
+    jz .session_status
     lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_continue]
     call strcmp
@@ -299,6 +326,17 @@ debug_run:
     lea rdi, [rel msg_session_unknown]
     call puts
     jmp .session_prompt
+.session_step:
+    mov dword [rbp+SESSION_STEPPING], 1
+    jmp .step_loop
+.session_status:
+    lea rdi, [rel msg_session_status]
+    mov rsi, [rbp-16]
+    mov edx, [rbp-272]
+    mov ecx, [rbp-36]
+    xor eax, eax
+    call printf
+    jmp .session_prompt
 .session_regs:
     call .get_regs
     test eax, eax
@@ -307,7 +345,9 @@ debug_run:
     call print_registers        ; explicit regs always shows complete state
     jmp .session_prompt
 .session_continue:
-    mov dword [rbp-36], 0
+    ; If paused by a genuine signal-delivery stop, continue forwards
+    ; the recorded pending signal rather than silently swallowing it.
+    mov dword [rbp+SESSION_STEPPING], 0
     jmp .resume
 .session_quit:
     lea rdi, [rel msg_session_quit]
@@ -343,6 +383,16 @@ debug_run:
     jmp .siginfo_failed
 .valid_signal_stop:
     call .report_signal_stop
+    cmp dword [rbp+SESSION_MODE], 0
+    je .resume
+    cmp dword [rbp+SESSION_STEPPING], 0
+    je .resume                 ; continue remains noninteractive
+    mov dword [rbp+SESSION_STEPPING], 0
+    lea rdi, [rel msg_pending_signal]
+    mov esi, [rbp-36]
+    xor eax, eax
+    call printf
+    jmp .session_prompt       ; child is stopped, signal not yet injected
 .resume:
     mov edi, PTRACE_CONT
     mov rsi, [rbp-16]
