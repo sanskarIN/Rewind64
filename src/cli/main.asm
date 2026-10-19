@@ -13,6 +13,7 @@ extern debug_run
 %define SEEN_STEPS   -40
 %define SEEN_CHANGES -44
 %define SEEN_OBSERVE -48
+%define SEEN_SESSION -52
 
 section .rodata
     flag_help:      db '--help', 0
@@ -20,24 +21,26 @@ section .rodata
     flag_steps:     db '--steps', 0
     flag_changes:   db '--changes-only', 0
     flag_observe:   db '--observe-only', 0
+    flag_session:   db '--interactive', 0
     flag_terminator: db '--', 0
     cmd_run:        db 'run', 0
     help_text:      db 'Rewind64 - Explore execution. Trace every instruction. Understand the past.', 10
                     db 'Usage:', 10
                     db '  rewind64 --help', 10
                     db '  rewind64 --version', 10
-                    db '  rewind64 run [--steps N | --observe-only] [--changes-only] [--] PROGRAM [ARGS...]', 10
+                    db '  rewind64 run [--steps N | --observe-only | --interactive] [--changes-only] [--] PROGRAM [ARGS...]', 10
                     db '  N must be 1..64; default N=1.', 10
                     db '  --observe-only captures initial state and follows events without stepping.', 10
-                    db '  --observe-only and --steps cannot be combined.', 10
+                    db '  --steps, --observe-only and --interactive are mutually exclusive.', 10
+                    db '  --interactive supports step, regs, continue, help, quit at the entry stop.', 10
                     db '  --changes-only hides repeated full register tables, not CPU deltas.', 10
                     db '  -- ends option parsing (use for programs beginning with --).', 10
                     db 'Only Linux x86-64 run is implemented.', 0
-    version_text:   db 'Rewind64 v0.1.9-pre (Linux x86-64)', 0
-    usage_error:    db 'Error: expected rewind64 run [--steps N | --observe-only] [--changes-only] [--] PROGRAM [ARGS...].', 0
+    version_text:   db 'Rewind64 v0.2.0-pre (Linux x86-64)', 0
+    usage_error:    db 'Error: expected rewind64 run [--steps N | --observe-only | --interactive] [--changes-only] [--] PROGRAM [ARGS...].', 0
     steps_error:    db 'Error: steps must be in range 1..64 (decimal digits only).', 0
     options_error:  db 'Error: duplicate option; each run flag may be specified once.', 0
-    conflict_error: db 'Error: --observe-only and --steps are mutually exclusive.', 0
+    conflict_error: db 'Error: --steps, --observe-only and --interactive are mutually exclusive.', 0
     unknown_error:  db 'Error: unsupported command. See rewind64 --help.', 0
 
 section .text
@@ -77,6 +80,7 @@ main:
     mov dword [rbp+SEEN_STEPS], 0
     mov dword [rbp+SEEN_CHANGES], 0
     mov dword [rbp+SEEN_OBSERVE], 0
+    mov dword [rbp+SEEN_SESSION], 0
 .option_loop:
     mov rcx, [rbp+ARG_INDEX]
     cmp rcx, [rbp-8]
@@ -112,6 +116,14 @@ main:
     test eax, eax
     jz .set_observe
 
+    mov rcx, [rbp+ARG_INDEX]
+    mov rax, [rbp-16]
+    mov rdi, [rax+rcx*8]
+    lea rsi, [rel flag_session]
+    call strcmp
+    test eax, eax
+    jz .set_session
+
     jmp .run_target                  ; ordinary target path, no shell
 
 .terminator:
@@ -121,10 +133,24 @@ main:
     jae .usage
     jmp .run_target
 
+.set_session:
+    cmp dword [rbp+SEEN_SESSION], 0
+    jne .duplicate
+    cmp dword [rbp+SEEN_STEPS], 0
+    jne .conflict
+    cmp dword [rbp+SEEN_OBSERVE], 0
+    jne .conflict
+    mov dword [rbp+SEEN_SESSION], 1
+    mov dword [rbp+STEP_LIMIT], 0
+    inc qword [rbp+ARG_INDEX]
+    jmp .option_loop
+
 .set_observe:
     cmp dword [rbp+SEEN_OBSERVE], 0
     jne .duplicate
     cmp dword [rbp+SEEN_STEPS], 0
+    jne .conflict
+    cmp dword [rbp+SEEN_SESSION], 0
     jne .conflict
     mov dword [rbp+SEEN_OBSERVE], 1
     mov dword [rbp+STEP_LIMIT], 0
@@ -141,6 +167,8 @@ main:
 
 .parse_steps:
     cmp dword [rbp+SEEN_OBSERVE], 0
+    jne .conflict
+    cmp dword [rbp+SEEN_SESSION], 0
     jne .conflict
     cmp dword [rbp+SEEN_STEPS], 0
     jne .duplicate
@@ -180,6 +208,7 @@ main:
     lea rdi, [rdi+rcx*8]            ; null-terminated &argv[target]
     mov esi, [rbp+STEP_LIMIT]
     mov edx, [rbp+CHANGES_ONLY]
+    mov ecx, [rbp+SEEN_SESSION]
     call debug_run
     jmp .done
 
