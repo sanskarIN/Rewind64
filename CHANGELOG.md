@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.5 - 2026-10-19 (experimental prerelease)
+
+- Log and count observed ptrace signal-delivery stops, including stops during initial bounded stepping and later process continuation.
+- Report `Signals forwarded: N` with completed instruction steps and target exit/signal diagnostics.
+- Added an Assembly fixture that installs an `rt_sigaction` SIGUSR1 handler, exercises two signal deliveries and exits successfully only after both handlers ran.
+- Expanded Python-free Bash tests to cover signal counters on handled signals, SIGTERM, SIGTRAP, SIGSEGV, and normal exits.
+- Retained Linux x86-64, glibc, NASM and Boost Software License 1.0. No recording or reverse execution.
+
 ## v0.1.4 - 2026-10-18 (experimental prerelease)
 
 - Added `run [--steps N] [--changes-only] [--] PROGRAM [ARGS...]` with flags accepted in either order before the target and an explicit `--` delimiter.
