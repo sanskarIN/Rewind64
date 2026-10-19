@@ -58,8 +58,8 @@ check() {
 }
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
-help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.1.9-pre'; }
+help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
+version() { assert_contains version 'v0.2.0-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -310,6 +310,70 @@ observe_args() {
   assert_contains observe_args 'Target exited with status 0'
 }
 conflict() { assert_contains conflict 'mutually exclusive'; }
+
+# Pipe only fixed fixture command files into a real stdin-backed session.
+# No shell evaluation of target arguments or Python test harness.
+session_exec() {
+  local commands="$1"
+  shift
+  "$@" < "$commands"
+}
+session_continue() {
+  assert_contains session_continue 'Interactive session:' &&
+  assert_contains session_continue 'Interactive steps completed: 0' &&
+  assert_contains session_continue 'Target exited with status 7' &&
+  assert_count session_continue 'After step:' 0 &&
+  assert_contains session_continue 'Ptrace events: exec=0 exit=1'
+}
+session_steps() {
+  assert_contains session_steps 'Interactive steps completed: 2' &&
+  assert_count session_steps 'After step:' 2 &&
+  assert_count session_steps 'Register changes:' 2 &&
+  assert_contains session_steps 'Target exited with status 0' &&
+  assert_contains session_steps 'Ptrace events: exec=0 exit=1'
+}
+session_regs() {
+  assert_contains session_regs 'Interactive steps completed: 1' &&
+  assert_count session_regs '    GPR:' 1 &&
+  assert_count session_regs 'After step:' 1 &&
+  assert_contains session_regs 'Target exited with status 0'
+}
+session_quit() {
+  assert_contains session_quit 'Interactive session ended; tracee terminated and reaped.' &&
+  assert_contains session_quit 'Interactive steps completed: 0' &&
+  assert_not_running session_quit
+}
+session_eof() {
+  assert_contains session_eof 'Interactive session ended; tracee terminated and reaped.' &&
+  assert_not_running session_eof
+}
+session_help() {
+  assert_count session_help 'Interactive session:' 2 &&
+  assert_contains session_help 'Unknown session command. Type help.' &&
+  assert_contains session_help 'Interactive steps completed: 0' &&
+  assert_not_running session_help
+}
+session_quit_after_steps() {
+  assert_count session_quit_after_steps 'After step:' 3 &&
+  assert_contains session_quit_after_steps 'Interactive steps completed: 3' &&
+  assert_not_running session_quit_after_steps
+}
+session_signal() {
+  assert_contains session_signal 'Interactive steps completed: 0' &&
+  assert_contains session_signal 'Signal-delivery stop: signal 10 si_code=0' &&
+  assert_contains session_signal 'Target terminated by signal 10'
+}
+session_reexec() {
+  assert_contains session_reexec 'Ptrace events: exec=1 exit=1' &&
+  assert_contains session_reexec 'Interactive steps completed: 0' &&
+  assert_contains session_reexec 'Target exited with status 42'
+}
+session_group_stop() {
+  assert_contains session_group_stop 'Error: job-control group stop is unsupported' &&
+  assert_not_running session_group_stop
+}
+session_missing_exec() { assert_contains session_missing_exec 'execvp'; }
+
 exits_zero_signals() {
   assert_contains exits_zero_signals 'Target exited with status 42' &&
   assert_contains exits_zero_signals 'Signals forwarded: 0' &&
@@ -320,8 +384,34 @@ exits_zero_signals() {
 
 
 # Run tests directly to avoid interpreting executable arguments in a shell.
+# Command scripts exercise the same stdin API as a terminal user.
+printf 'continue\n' > "$tmp/session-continue"
+printf 'step\nstep\ncontinue\n' > "$tmp/session-steps"
+printf 'regs\nstep\ncontinue\n' > "$tmp/session-regs"
+printf 'quit\n' > "$tmp/session-quit"
+: > "$tmp/session-eof"
+printf 'help\ninvalid\nq\n' > "$tmp/session-help"
+printf 's\ns\ns\nq\n' > "$tmp/session-quit-steps"
+
 check help 0 "$BIN" --help
 check version 0 "$BIN" --version
+check session_continue 7 session_exec "$tmp/session-continue" "$BIN" run --interactive "$ROOT/build/exit7"
+check session_steps 0 session_exec "$tmp/session-steps" "$BIN" run --interactive "$ROOT/build/long_steps"
+check session_regs 0 session_exec "$tmp/session-regs" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
+check session_quit 0 session_exec "$tmp/session-quit" "$BIN" run --interactive "$ROOT/build/long_steps"
+check session_eof 0 session_exec "$tmp/session-eof" "$BIN" run --interactive "$ROOT/build/exit0"
+check session_help 0 session_exec "$tmp/session-help" "$BIN" run --interactive "$ROOT/build/exit0"
+check session_quit_after_steps 0 session_exec "$tmp/session-quit-steps" "$BIN" run --interactive "$ROOT/build/long_steps"
+check session_signal 138 session_exec "$tmp/session-continue" "$BIN" run --interactive "$ROOT/build/signal_usr1"
+check session_reexec 42 session_exec "$tmp/session-continue" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check session_group_stop 1 session_exec "$tmp/session-continue" "$BIN" run --interactive "$ROOT/build/group_stop"
+check session_missing_exec 127 session_exec "$tmp/session-quit" "$BIN" run --interactive /definitely-not-a-real-rewind64-program
+check conflict 2 "$BIN" run --interactive --steps 2 "$ROOT/build/exit0"
+check conflict 2 "$BIN" run --steps 2 --interactive "$ROOT/build/exit0"
+check conflict 2 "$BIN" run --interactive --observe-only "$ROOT/build/exit0"
+check conflict 2 "$BIN" run --observe-only --interactive "$ROOT/build/exit0"
+check duplicate 2 "$BIN" run --interactive --interactive "$ROOT/build/exit0"
+check flag_usage 2 "$BIN" run --interactive
 check unsupported 2 "$BIN" replay absent.r64
 check usage 2 "$BIN" run
 check zero 0 "$BIN" run "$ROOT/build/exit0"
