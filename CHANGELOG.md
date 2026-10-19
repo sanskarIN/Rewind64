@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.9 - 2026-10-19 (experimental prerelease)
+
+- Implemented a true zero-single-step observation option: `run --observe-only PROGRAM`. It captures initial registers and then follows ptrace exec/exit events and signal-delivery stops to termination.
+- Rejects incompatible `--observe-only` and `--steps N` flags in either order; `--changes-only` and the `--` option delimiter remain supported.
+- Reports signal sender PID and UID from the Linux `siginfo_t` union only for SI_USER (0) and SI_TKILL (-6), not for kernel fault signals.
+- Expanded pure Bash regression suite to 61 cases, including observation of normal exits, exec replacement, repeated handlers, fatal signals, job-control stops and malformed options.
+- Assembly-only debugger and fixtures, Python-free tests, Linux x86-64 only. No recording, interactive control or reverse execution.
+
 ## v0.1.8 - 2026-10-19 (experimental prerelease)
 
 - Read `PTRACE_GETEVENTMSG` at `PTRACE_EVENT_EXIT` stops and display the kernel's raw wait-status payload before final process termination.
