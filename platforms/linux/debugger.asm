@@ -25,6 +25,12 @@ extern print_register_changes
 %define PTRACE_SETOPTIONS  0x4200
 %define PTRACE_GETSIGINFO  0x4202
 %define PTRACE_O_EXITKILL  0x00100000
+%define PTRACE_O_TRACEEXEC 0x00000010
+%define PTRACE_O_TRACEEXIT 0x00000040
+%define PTRACE_EVENT_EXEC  4
+%define PTRACE_EVENT_EXIT  6
+%define EXEC_EVENTS        (-648)        ; outside previous register snapshot
+%define EXIT_EVENTS        (-652)
 %define SIGKILL            9
 %define SIGTRAP            5
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
@@ -45,6 +51,10 @@ section .rodata
     msg_steps:     db 'Steps completed: %d / %d', 10, 0
     msg_signal_stop: db 'Signal-delivery stop: signal %d', 10, 0
     msg_stop_total:  db 'Signals forwarded: %d', 10, 0
+    msg_exec_event:  db 'Ptrace exec event: pid=%ld', 10, 0
+    msg_exit_event:  db 'Ptrace exit event: pid=%ld', 10, 0
+    msg_event_total: db 'Ptrace events: exec=%u exit=%u', 10, 0
+    err_event:      db 'Error: unsupported ptrace event %u', 10, 0
     msg_other_trap: db 'Unexpected SIGTRAP si_code=%d during step', 10, 0
     err_fork:      db 'fork', 0
     err_trace:     db 'ptrace(TRACEME)', 0
@@ -72,6 +82,8 @@ debug_run:
     mov dword [rbp-40], edx       ; compact register display flag
     mov dword [rbp-272], 0        ; completed steps
     mov dword [rbp+SIGNAL_STOPS], 0 ; observed signal-delivery stops
+    mov dword [rbp+EXEC_EVENTS], 0
+    mov dword [rbp+EXIT_EVENTS], 0
     call fork
     test eax, eax
     js .fork_failed
@@ -97,7 +109,7 @@ debug_run:
     mov edi, PTRACE_SETOPTIONS
     mov rsi, [rbp-16]
     xor edx, edx
-    mov ecx, PTRACE_O_EXITKILL
+    mov ecx, PTRACE_O_EXITKILL | PTRACE_O_TRACEEXEC | PTRACE_O_TRACEEXIT
     xor eax, eax
     call ptrace
     cmp rax, -1
@@ -128,6 +140,12 @@ debug_run:
     and eax, 0xff
     cmp eax, 0x7f
     jne .not_stopped
+    ; Trace event stops encode their PTRACE_EVENT_* value in the upper
+    ; 16 bits of wait status and MUST NOT be forwarded as SIGTRAP.
+    mov eax, [rbp+STATUS]
+    shr eax, 16
+    test eax, eax
+    jnz .ptrace_event
     mov eax, [rbp+STATUS]
     shr eax, 8
     and eax, 0xff
@@ -228,12 +246,44 @@ debug_run:
     jmp .wrong_stop
 
 .stopped_again:
+    mov edx, eax
+    shr edx, 16
+    test edx, edx
+    jnz .ptrace_event
     shr eax, 8
     and eax, 0xff
     mov [rbp-36], eax
     call .report_signal_stop
     ; After the single-step trap, later signals belong to the target.
     ; In particular, do not swallow application-generated SIGTRAP.
+    jmp .resume
+
+; PTRACE_O_TRACEEXEC / PTRACE_O_TRACEEXIT produce synthetic SIGTRAP
+; wait stops, not application signals. Resume with signal zero.
+.ptrace_event:
+    mov eax, [rbp+STATUS]
+    shr eax, 16
+    cmp eax, PTRACE_EVENT_EXEC
+    je .observed_exec
+    cmp eax, PTRACE_EVENT_EXIT
+    je .observed_exit
+    mov esi, eax
+    lea rdi, [rel err_event]
+    xor eax, eax
+    call printf
+    jmp .cleanup
+.observed_exec:
+    inc dword [rbp+EXEC_EVENTS]
+    lea rdi, [rel msg_exec_event]
+    jmp .event_print
+.observed_exit:
+    inc dword [rbp+EXIT_EVENTS]
+    lea rdi, [rel msg_exit_event]
+.event_print:
+    mov rsi, [rbp-16]
+    xor eax, eax
+    call printf
+    mov dword [rbp-36], 0
     jmp .resume
 
 .exited:
@@ -294,6 +344,11 @@ debug_run:
     call printf
     lea rdi, [rel msg_stop_total]
     mov esi, [rbp+SIGNAL_STOPS]
+    xor eax, eax
+    call printf
+    lea rdi, [rel msg_event_total]
+    mov esi, [rbp+EXEC_EVENTS]
+    mov edx, [rbp+EXIT_EVENTS]
     xor eax, eax
     call printf
     add rsp, 8
