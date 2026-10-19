@@ -1,5 +1,14 @@
 # Rewind64 development progress
 
+## v0.1.7 development — 2026-10-19
+
+- Release target: **v0.1.7 experimental Linux x86-64 prerelease**; not stable.
+- Extended NASM Linux debugger to classify ordinary signal-delivery stops with `PTRACE_GETSIGINFO` and detect unsupported job-control group stops when the query returns `EINVAL`. Group stops now terminate with an explicit diagnostic rather than potentially looping after reinjecting `SIGSTOP`.
+- Reworked error cleanup to send SIGKILL and **drain intermediate ptrace wait stops**, including synthetic exit events. Each nonterminal stopped state is resumed with `PTRACE_CONT` signal zero. The bounded loop is defensive, not a guarantee of universal cleanup.
+- Added `tests/fixtures/group_stop.asm` (pure NASM) and Bash assertions for standard, `--changes-only`, and mid-step group stops, plus checks that the tracee PID has been reaped.
+- Native NASM/ELF build and **45/45 Python-free Bash tests passed** on Ubuntu 22.04 and 24.04: https://github.com/sanskarIN/Rewind64/actions/runs/39219331206 .
+- Retained the existing Boost Software License 1.0 and Linux x86-64 single-tracee scope. Correct continuation through group stops, full thread/process tracing, reverse execution, and deterministic replay remain unsupported.
+
 ## v0.1.6 development — 2026-10-19
 
 - **Published:** [v0.1.6 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.6), not stable. Native build/tests, SHA-256 packaging and release publication succeeded: https://github.com/sanskarIN/Rewind64/actions/runs/39216521066 .
