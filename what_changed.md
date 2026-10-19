@@ -2,7 +2,7 @@
 
 ## v0.1.6 development — 2026-10-19
 
-- **Target:** experimental Linux x86-64 prerelease v0.1.6; not stable.
+- **Published:** [v0.1.6 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.6), not stable. Native build/tests, SHA-256 packaging and release publication succeeded: https://github.com/sanskarIN/Rewind64/actions/runs/39216521066 .
 - Enabled `PTRACE_O_TRACEEXEC` and `PTRACE_O_TRACEEXIT` alongside `PTRACE_O_EXITKILL` in the Assembly backend. Ptrace event stops are decoded from bits 16..31 of wait status and resumed with signal zero instead of accidentally forwarding a kernel-generated SIGTRAP.
 - Added `Ptrace exec event` and `Ptrace exit event` diagnostics plus `Ptrace events: exec=N exit=N` counts, separate from `Signals forwarded: N`.
 - Added `tests/fixtures/reexec.asm` (NASM Linux execve fixture) to exercise image replacement and target exit. Extended Bash integration checks for normal mode, compact display, and early exit event accounting.
