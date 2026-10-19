@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.0 - 2026-10-19 (experimental Linux prerelease)
+
+- Added an Assembly-implemented `--interactive` debugger mode for one launched Linux x86-64 tracee, with `step`/`s`, `regs`/`r`, `continue`/`c`, `help`, and `quit`/`q` commands.
+- Reuses the existing ptrace single-step trap classification, register-delta formatter, exec/exit event observation, signal forwarding, and best-effort child cleanup.
+- `--interactive` rejects conflicts with `--steps N` and `--observe-only`, but accepts `--changes-only` and target argument delimiter `--`.
+- Explicit `regs` shows the full CPU snapshot even when concise display is enabled. `quit` and stdin EOF attempt to terminate and reap the tracee without resuming it normally.
+- New Bash scripted-stdin test harness validates session command sequences, repeated steps, signal/exec/fault lifecycle, cleanup, unusual CLI combinations, and short commands. Native NASM checks expand from 61 to 78 cases.
+- The release remains experimental, **Linux x86-64 only**, with no Windows/macOS backend, process attachment, breakpoints, trace recording, deterministic replay or reverse stepping.
+- The previously planned Windows v0.2.0 backend is deferred to a future release. Boost Software License 1.0 retained; no Python source or test dependency.
+
 ## v0.1.9 - 2026-10-19 (experimental prerelease)
 
 - Implemented a true zero-single-step observation option: `run --observe-only PROGRAM`. It captures initial registers and then follows ptrace exec/exit events and signal-delivery stops to termination.
