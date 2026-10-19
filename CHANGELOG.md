@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.2 - 2026-10-19 (experimental Linux prerelease)
+
+- Added native Assembly interactive `code` / `x` command for a **read-only eight-byte word at the tracee's current RIP**, using a fresh `PTRACE_GETREGS` followed by `PTRACE_PEEKTEXT`.
+- Handles the Linux ptrace `-1` ambiguity correctly: clears `errno` before peeking, checks `errno` only on a `-1` return, and keeps the session active on peek failure.
+- Added an Assembly executable fixture with a `0xffffffffffffffff` entry word, ensuring successful all-ones reads do not trigger false failures. The tracee is never resumed by this regression.
+- Expanded Python-free Bash integration suite from **86 to 92** tests, covering entry-point inspection, after-step RIP changes, compact output, pending SIGILL, coexistence with register display and safe quit.
+- Retained Boost Software License 1.0 and Linux x86-64 single-tracee experimental scope. No arbitrary-address memory reading, disassembler, breakpoints, recording or reverse execution.
+
 ## v0.2.1 - 2026-10-19 (experimental Linux prerelease)
 
 - Interactive `step` now pauses at verified application signal-delivery stops (including SIGILL, SIGSEGV, and SIGTRAP), preserving the pending signal and allowing register inspection or explicit next action.
