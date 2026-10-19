@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.6 - 2026-10-19 (experimental prerelease)
+
+- Enabled Linux `PTRACE_O_TRACEEXEC` / `PTRACE_O_TRACEEXIT` with the existing `PTRACE_O_EXITKILL` option.
+- Distinguished kernel ptrace event stops using `waitpid` event bits and resumed them without forwarding a synthetic SIGTRAP to the target.
+- Added exec/exit event logging and diagnostic event counts distinct from ordinary forwarded-signal counts.
+- Added a NASM re-exec fixture exercising in-process image replacement and expanded Bash tests for event accounting and early exits.
+- Native Linux x86-64 NASM build and 42 Python-free Bash integration checks passed on Ubuntu 22.04 and 24.04.
+- Remains a single-tracee experimental debugger without replay or process/thread following.
+
 ## v0.1.5 - 2026-10-19 (experimental prerelease)
 
 - Log and count observed ptrace signal-delivery stops, including stops during initial bounded stepping and later process continuation.
