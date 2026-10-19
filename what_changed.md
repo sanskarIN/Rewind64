@@ -1,5 +1,14 @@
 # Rewind64 development progress
 
+## v0.1.6 development — 2026-10-19
+
+- **Target:** experimental Linux x86-64 prerelease v0.1.6; not stable.
+- Enabled `PTRACE_O_TRACEEXEC` and `PTRACE_O_TRACEEXIT` alongside `PTRACE_O_EXITKILL` in the Assembly backend. Ptrace event stops are decoded from bits 16..31 of wait status and resumed with signal zero instead of accidentally forwarding a kernel-generated SIGTRAP.
+- Added `Ptrace exec event` and `Ptrace exit event` diagnostics plus `Ptrace events: exec=N exit=N` counts, separate from `Signals forwarded: N`.
+- Added `tests/fixtures/reexec.asm` (NASM Linux execve fixture) to exercise image replacement and target exit. Extended Bash integration checks for normal mode, compact display, and early exit event accounting.
+- **42/42 Python-free integration tests passed** on Ubuntu 22.04 and Ubuntu 24.04 during PR validation: https://github.com/sanskarIN/Rewind64/actions/runs/39216202778 .
+- No Python files or Python dependency were added. Rewind64 still supports one launched tracee on Linux x86-64 only; this is not a history recorder or full event/thread/fork manager.
+
 ## v0.1.5 development — 2026-10-19
 
 - **Published v0.1.5 experimental Linux x86-64 prerelease:** https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.5 . The clean NASM prerelease build, archive checksum and artifact publication succeeded: https://github.com/sanskarIN/Rewind64/actions/runs/39201835241 .
