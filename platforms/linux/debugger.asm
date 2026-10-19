@@ -49,6 +49,9 @@ extern stdout
 %define STACK_BASE         (-720)        ; saved RSP from fresh registers
 %define STACK_INDEX        (-724)        ; bounded word index, 0..3
 %define STACK_WORD_LIMIT   4
+%define MEMORY_ADDRESS     (-736)        ; one address read from strict hex
+%define MEMORY_DIGITS      (-740)        ; parsed digit count, max 16
+%define MEMORY_WORD        (-752)        ; qword from PTRACE_PEEKDATA
 %define SESSION_BUFFER     (-832)        ; 64-byte input buffer, -832..-769
 %define SESSION_BUF_SIZE    64
 %define SIGKILL            9
@@ -65,7 +68,9 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step | regs | status | code | stack | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step | regs | status | code | stack | mem 0xHEX | continue | help | quit', 0
+    msg_memory_word: db 'Memory word at 0x%016lx: 0x%016lx', 10, 0
+    msg_memory_usage: db 'Usage: mem 0xHEX or m 0xHEX (1..16 digits; reads 8 bytes)', 0
     msg_stack_word: db 'Stack word [%u] at 0x%016lx: 0x%016lx', 10, 0
     msg_code_word: db 'Code word at RIP=0x%016lx: 0x%016lx', 10, 0
     msg_session_status: db 'Session status: pid=%ld steps=%u pending_signal=%u', 10, 0
@@ -111,6 +116,7 @@ section .rodata
     err_siginfo:   db 'ptrace(GETSIGINFO)', 0
     err_code_read: db 'ptrace(PEEKTEXT at RIP)', 0
     err_stack_read: db 'ptrace(PEEKDATA at RSP)', 0
+    err_memory_read: db 'ptrace(PEEKDATA at address)', 0
     err_eventmsg:  db 'ptrace(GETEVENTMSG)', 0
     err_step:      db 'ptrace(SINGLESTEP)', 0
     err_cont:      db 'ptrace(CONT)', 0
@@ -128,7 +134,7 @@ section .text
 ; Stack frame holds pid, status, and two disjoint 216-byte register blocks.
 ; Previous snapshot -640..-425, siginfo -400..-273, new regs -256..-41.
 ; Event payload at -664..-657 is distinct from cleanup counters and CPU state.
-; Prompt control at -724..-677, text input at -832..-769.
+; Prompt control and memory words at -752..-677, text input at -832..-769.
 debug_run:
     push rbp
     mov rbp, rsp
@@ -338,6 +344,25 @@ debug_run:
     call strcmp
     test eax, eax
     jz .session_stack
+    ; Only accept 'mem 0x...' or 'm 0x...'. The address parser below
+    ; validates every hexadecimal digit and the entire trailing line.
+    lea rsi, [rbp+SESSION_BUFFER]
+    cmp byte [rsi], 'm'
+    jne .session_not_memory
+    cmp byte [rsi+1], 'e'
+    jne .session_short_memory
+    cmp byte [rsi+2], 'm'
+    jne .session_not_memory
+    cmp byte [rsi+3], ' '
+    jne .session_memory_usage
+    add rsi, 4
+    jmp .session_memory_parse
+.session_short_memory:
+    cmp byte [rsi+1], ' '
+    jne .session_not_memory
+    add rsi, 2
+    jmp .session_memory_parse
+.session_not_memory:
     lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_continue]
     call strcmp
@@ -459,6 +484,85 @@ debug_run:
     ; A non-readable RSP reports one error, without resuming the tracee.
     lea rdi, [rel err_stack_read]
     call perror
+    jmp .session_prompt
+.session_memory_parse:
+    ; Strict 0x-prefixed hex, 1..16 digits. Do not use strtoull:
+    ; signs, whitespace, trailing junk and silent overflow are rejected.
+    cmp byte [rsi], '0'
+    jne .session_memory_usage
+    cmp byte [rsi+1], 'x'
+    je .memory_prefix_ok
+    cmp byte [rsi+1], 'X'
+    jne .session_memory_usage
+.memory_prefix_ok:
+    add rsi, 2
+    xor rdx, rdx                ; 64-bit address accumulator
+    xor ecx, ecx                ; number of valid hex digits
+.memory_digit:
+    movzx r8d, byte [rsi]
+    test r8b, r8b
+    jz .memory_end
+    cmp r8b, 10
+    je .memory_end
+    cmp r8b, '0'
+    jb .session_memory_usage
+    cmp r8b, '9'
+    jbe .memory_numeric
+    cmp r8b, 'A'
+    jb .session_memory_usage
+    cmp r8b, 'F'
+    jbe .memory_uppercase
+    cmp r8b, 'a'
+    jb .session_memory_usage
+    cmp r8b, 'f'
+    ja .session_memory_usage
+    sub r8d, 'a'-10
+    jmp .memory_valid_digit
+.memory_uppercase:
+    sub r8d, 'A'-10
+    jmp .memory_valid_digit
+.memory_numeric:
+    sub r8d, '0'
+.memory_valid_digit:
+    cmp ecx, 16
+    jae .session_memory_usage  ; reject overflow and excess digits
+    shl rdx, 4
+    or rdx, r8
+    inc ecx
+    inc rsi
+    jmp .memory_digit
+.memory_end:
+    test ecx, ecx
+    jz .session_memory_usage
+    mov [rbp+MEMORY_ADDRESS], rdx
+    call __errno_location
+    mov dword [rax], 0
+    mov edi, PTRACE_PEEKDATA
+    mov rsi, [rbp-16]
+    mov rdx, [rbp+MEMORY_ADDRESS]
+    xor ecx, ecx
+    xor eax, eax
+    call ptrace
+    mov [rbp+MEMORY_WORD], rax
+    cmp rax, -1
+    jne .memory_print
+    call __errno_location
+    cmp dword [rax], 0
+    jne .memory_read_failed
+.memory_print:
+    lea rdi, [rel msg_memory_word]
+    mov rsi, [rbp+MEMORY_ADDRESS]
+    mov rdx, [rbp+MEMORY_WORD]
+    xor eax, eax
+    call printf
+    jmp .session_prompt
+.memory_read_failed:
+    lea rdi, [rel err_memory_read]
+    call perror
+    jmp .session_prompt
+.session_memory_usage:
+    lea rdi, [rel msg_memory_usage]
+    call puts
     jmp .session_prompt
 .session_continue:
     ; If paused by a genuine signal-delivery stop, continue forwards
