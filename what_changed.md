@@ -1,5 +1,16 @@
 # Rewind64 development progress
 
+## v0.2.0 interactive Linux development — 2026-10-19
+
+- Target: **v0.2.0 experimental Linux x86-64 prerelease**. The original plan for a Windows x86-64 v0.2.0 backend was deferred; this milestone strengthens the Linux foundation first.
+- Implemented `run --interactive PROGRAM [ARGS...]` in native NASM Assembly: initial stop CPU register snapshot, flushed `rewind64> ` prompt, newline-terminated `step`/`s`, `regs`/`r`, `continue`/`c`, `help`, and `quit`/`q` commands.
+- `step` returns to the prompt on recognized single-step traps using the existing register snapshots and deltas; `regs` prints full CPU state from `PTRACE_GETREGS` even under `--changes-only`. `continue` resumes normal ptrace wait/exec/exit/signal processing; `quit` and stdin EOF request SIGKILL followed by bounded ptrace-stop cleanup/reaping.
+- `--interactive` is incompatible with `--steps N` / `--observe-only` and works with `--changes-only`. Command parsing and debugging remain Assembly-only; integration tests remain Bash + native Assembly fixtures, with no Python.
+- The first new CI attempt found a test harness bug (Bash helper passed to `timeout` as an executable returned 127); corrected it to apply the command script through stdin to the real timed debugger executable.
+- **78/78 Python-free integration checks passed** on both Ubuntu 22.04 and 24.04 after correction: https://github.com/sanskarIN/Rewind64/actions/runs/39230470947 .
+- Interactive mode is deliberately limited to one tracee and the initial stop or recognized step completions; it is not full terminal/job-control support. Breakpoints, memory browsing, multithread following, reverse stepping, recording, deterministic replay, Windows/macOS and stable release remain unimplemented.
+- Retained Boost Software License 1.0 and commit author email `sanskarin@outlook.in`.
+
 ## v0.1.9 development — 2026-10-19
 
 - **Published:** [v0.1.9 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.9), not stable. Clean NASM release build/tests, SHA-256 packaging and publishing succeeded: https://github.com/sanskarIN/Rewind64/actions/runs/39227105042 .
