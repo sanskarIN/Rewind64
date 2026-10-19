@@ -115,7 +115,13 @@ build/reexec.o: tests/fixtures/reexec.asm | build
 build/reexec: build/reexec.o
 	$(LD) -o $@ $<
 
-fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps build/illegal build/divzero build/exit42 build/handled_signal build/reexec
+build/group_stop.o: tests/fixtures/group_stop.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/group_stop: build/group_stop.o
+	$(LD) -o $@ $<
+
+fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps build/illegal build/divzero build/exit42 build/handled_signal build/reexec build/group_stop
 
 test: all fixtures
 	bash tests/integration/test_cli.sh
