@@ -24,6 +24,7 @@ extern stdout
 
 %define PTRACE_TRACEME     0
 %define PTRACE_PEEKTEXT    1
+%define PTRACE_PEEKDATA    2
 %define PTRACE_CONT        7
 %define PTRACE_SINGLESTEP  9
 %define PTRACE_GETREGS     12
@@ -44,6 +45,10 @@ extern stdout
 %define SESSION_STEPPING   (-688)        ; dword: pending interactive single-step request
 %define INJECTED_SIGNAL    (-692)        ; dword: signal used by last ptrace resume
 %define CODE_WORD          (-704)        ; qword: PTRACE_PEEKTEXT result at current RIP
+%define STACK_WORD         (-712)        ; read-only PTRACE_PEEKDATA result
+%define STACK_BASE         (-720)        ; saved RSP from fresh registers
+%define STACK_INDEX        (-724)        ; bounded word index, 0..3
+%define STACK_WORD_LIMIT   4
 %define SESSION_BUFFER     (-832)        ; 64-byte input buffer, -832..-769
 %define SESSION_BUF_SIZE    64
 %define SIGKILL            9
@@ -60,7 +65,8 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step | regs | status | code | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step | regs | status | code | stack | continue | help | quit', 0
+    msg_stack_word: db 'Stack word [%u] at 0x%016lx: 0x%016lx', 10, 0
     msg_code_word: db 'Code word at RIP=0x%016lx: 0x%016lx', 10, 0
     msg_session_status: db 'Session status: pid=%ld steps=%u pending_signal=%u', 10, 0
     msg_pending_signal: db 'Interactive signal stop: signal %u pending; choose step, continue or quit.', 10, 0
@@ -72,6 +78,7 @@ section .rodata
     cmd_regs: db 'regs', 10, 0
     cmd_status: db 'status', 10, 0
     cmd_code: db 'code', 10, 0
+    cmd_stack: db 'stack', 10, 0
     cmd_continue: db 'continue', 10, 0
     cmd_quit: db 'quit', 10, 0
     cmd_help: db 'help', 10, 0
@@ -79,6 +86,7 @@ section .rodata
     cmd_short_regs: db 'r', 10, 0
     cmd_short_status: db 'i', 10, 0
     cmd_short_code: db 'x', 10, 0
+    cmd_short_stack: db 'k', 10, 0
     cmd_short_continue: db 'c', 10, 0
     cmd_short_quit: db 'q', 10, 0
     msg_step:      db 'After step:   pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
@@ -102,6 +110,7 @@ section .rodata
     err_regs:      db 'ptrace(GETREGS)', 0
     err_siginfo:   db 'ptrace(GETSIGINFO)', 0
     err_code_read: db 'ptrace(PEEKTEXT at RIP)', 0
+    err_stack_read: db 'ptrace(PEEKDATA at RSP)', 0
     err_eventmsg:  db 'ptrace(GETEVENTMSG)', 0
     err_step:      db 'ptrace(SINGLESTEP)', 0
     err_cont:      db 'ptrace(CONT)', 0
@@ -119,7 +128,7 @@ section .text
 ; Stack frame holds pid, status, and two disjoint 216-byte register blocks.
 ; Previous snapshot -640..-425, siginfo -400..-273, new regs -256..-41.
 ; Event payload at -664..-657 is distinct from cleanup counters and CPU state.
-; Prompt control at -704..-677, text input at -832..-769.
+; Prompt control at -724..-677, text input at -832..-769.
 debug_run:
     push rbp
     mov rbp, rsp
@@ -320,6 +329,16 @@ debug_run:
     test eax, eax
     jz .session_code
     lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_stack]
+    call strcmp
+    test eax, eax
+    jz .session_stack
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_stack]
+    call strcmp
+    test eax, eax
+    jz .session_stack
+    lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_continue]
     call strcmp
     test eax, eax
@@ -395,6 +414,50 @@ debug_run:
     jmp .session_prompt
 .session_code_failed:
     lea rdi, [rel err_code_read]
+    call perror
+    jmp .session_prompt
+.session_stack:
+    ; Read only four machine words starting at the current RSP. Bounds
+    ; are fixed here: no user-supplied memory addresses or write requests.
+    call .get_regs
+    cmp rax, -1
+    je .regs_failed
+    mov rax, [rbp+REG_RSP]
+    mov [rbp+STACK_BASE], rax
+    mov dword [rbp+STACK_INDEX], 0
+.stack_next:
+    call __errno_location
+    mov dword [rax], 0
+    mov edi, PTRACE_PEEKDATA
+    mov rsi, [rbp-16]
+    movsxd rax, dword [rbp+STACK_INDEX]
+    mov rdx, [rbp+STACK_BASE]
+    lea rdx, [rdx+rax*8]
+    xor ecx, ecx
+    xor eax, eax
+    call ptrace
+    mov [rbp+STACK_WORD], rax
+    cmp rax, -1
+    jne .stack_print
+    call __errno_location
+    cmp dword [rax], 0
+    jne .stack_failed
+.stack_print:
+    lea rdi, [rel msg_stack_word]
+    mov esi, [rbp+STACK_INDEX]
+    movsxd rax, dword [rbp+STACK_INDEX]
+    mov rdx, [rbp+STACK_BASE]
+    lea rdx, [rdx+rax*8]
+    mov rcx, [rbp+STACK_WORD]
+    xor eax, eax
+    call printf
+    inc dword [rbp+STACK_INDEX]
+    cmp dword [rbp+STACK_INDEX], STACK_WORD_LIMIT
+    jl .stack_next
+    jmp .session_prompt
+.stack_failed:
+    ; A non-readable RSP reports one error, without resuming the tracee.
+    lea rdi, [rel err_stack_read]
     call perror
     jmp .session_prompt
 .session_continue:
