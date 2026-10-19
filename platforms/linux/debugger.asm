@@ -53,6 +53,7 @@ section .rodata
     msg_signal:    db 'Target terminated by signal %d', 10, 0
     msg_steps:     db 'Steps completed: %d / %d', 10, 0
     msg_signal_stop: db 'Signal-delivery stop: signal %d si_code=%d', 10, 0
+    msg_sender:    db 'Signal sender: pid=%d uid=%u', 10, 0
     msg_stop_total:  db 'Signals forwarded: %d', 10, 0
     msg_exec_event:  db 'Ptrace exec event: pid=%ld', 10, 0
     msg_exit_event:  db 'Ptrace exit event: pid=%ld', 10, 0
@@ -77,7 +78,8 @@ section .rodata
 section .text
 ; debug_run(argv, step_limit, changes_only) => target status; 1 on tracing error.
 ; changes_only affects display only; kernel state capture and delta logic unchanged.
-; step_limit is CLI-validated in the inclusive range 1..64.
+; step_limit is CLI-validated in the inclusive range 1..64, or exactly 0
+; in --observe-only mode (initial snapshot and ptrace events; no single-step).
 ; Stack frame holds pid, status, and two disjoint 216-byte register blocks.
 ; Previous snapshot -640..-425, siginfo -400..-273, new regs -256..-41.
 ; Event payload at -664..-657 is distinct from cleanup counters and CPU state.
@@ -129,7 +131,12 @@ debug_run:
     lea rdi, [rel msg_initial]
     call .print_regs
     call .save_regs             ; persist previous state before stepping
-
+    ; Opt-in observation mode samples initial registers but performs no
+    ; PTRACE_SINGLESTEP requests; continue and observe events to termination.
+    cmp dword [rbp-264], 0
+    jne .step_loop
+    mov dword [rbp-36], 0
+    jmp .resume
 
 .step_loop:
     mov edi, PTRACE_SINGLESTEP
@@ -359,6 +366,21 @@ debug_run:
     mov edx, [rbp+SIGINFO+8]      ; signed si_code; e.g. SI_USER=0, SI_TKILL=-6
     xor eax, eax
     call printf
+    ; The kill(2) siginfo union exposes sender PID and UID at offsets
+    ; 16 and 20 only for user-originated SI_USER / SI_TKILL deliveries.
+    ; Never interpret these fields for kernel-generated CPU fault signals.
+    mov eax, [rbp+SIGINFO+8]
+    cmp eax, 0                   ; SI_USER
+    je .user_sender
+    cmp eax, -6                  ; SI_TKILL
+    jne .sender_done
+.user_sender:
+    lea rdi, [rel msg_sender]
+    mov esi, [rbp+SIGINFO+16]
+    mov edx, [rbp+SIGINFO+20]
+    xor eax, eax
+    call printf
+.sender_done:
     add rsp, 8
     ret
 
