@@ -395,6 +395,7 @@ session_signal_ill() {
   assert_contains session_signal_ill 'Interactive signal stop: signal 4 pending' &&
   assert_contains session_signal_ill 'steps=0 pending_signal=4' &&
   assert_contains session_signal_ill 'Signal-delivery stop: signal 4' &&
+  assert_contains session_signal_ill 'Signals forwarded: 1' &&
   assert_contains session_signal_ill 'Target terminated by signal 4' &&
   assert_count session_signal_ill 'After step:' 0
 }
@@ -402,23 +403,33 @@ session_signal_segv() {
   assert_contains session_signal_segv 'Interactive signal stop: signal 11 pending' &&
   assert_contains session_signal_segv 'steps=1 pending_signal=11' &&
   assert_contains session_signal_segv 'Target terminated by signal 11' &&
+  assert_contains session_signal_segv 'Signals forwarded: 1' &&
   assert_count session_signal_segv 'After step:' 1
 }
 session_signal_trap() {
   assert_contains session_signal_trap 'Interactive signal stop: signal 5 pending' &&
   assert_contains session_signal_trap 'steps=1 pending_signal=5' &&
-  assert_contains session_signal_trap 'Target terminated by signal 5'
+  assert_contains session_signal_trap 'Target terminated by signal 5' &&
+  assert_contains session_signal_trap 'Signals forwarded: 1'
 }
 session_signal_quit() {
   assert_contains session_signal_quit 'Interactive signal stop: signal 4 pending' &&
   assert_contains session_signal_quit 'steps=0 pending_signal=4' &&
   assert_contains session_signal_quit 'Interactive session ended; tracee terminated and reaped.' &&
+  assert_contains session_signal_quit 'Signals forwarded: 0' &&
   assert_not_running session_signal_quit
+}
+session_signal_step() {
+  assert_contains session_signal_step 'Interactive signal stop: signal 4 pending' &&
+  assert_contains session_signal_step 'steps=0 pending_signal=4' &&
+  assert_contains session_signal_step 'Signals forwarded: 1' &&
+  assert_contains session_signal_step 'Target terminated by signal 4'
 }
 session_signal_regs() {
   assert_contains session_signal_regs 'Interactive signal stop: signal 4 pending' &&
   assert_contains session_signal_regs 'steps=0 pending_signal=4' &&
   assert_count session_signal_regs '    GPR:' 1 &&
+  assert_contains session_signal_regs 'Signals forwarded: 0' &&
   assert_not_running session_signal_regs
 }
 
@@ -447,6 +458,7 @@ printf 'step\nstep\nstatus\ncontinue\n' > "$tmp/session-signal-segv"
 printf 'step\nstep\nstatus\ncontinue\n' > "$tmp/session-signal-trap"
 printf 'step\nstatus\nquit\n' > "$tmp/session-signal-quit"
 printf 'step\nregs\nstatus\nq\n' > "$tmp/session-signal-regs"
+printf 'step\nstatus\nstep\n' > "$tmp/session-signal-step"
 
 check help 0 "$BIN" --help
 check version 0 "$BIN" --version
@@ -458,6 +470,7 @@ check session_signal_segv 139 session_exec "$tmp/session-signal-segv" "$BIN" run
 check session_signal_trap 133 session_exec "$tmp/session-signal-trap" "$BIN" run --interactive "$ROOT/build/trap"
 check session_signal_quit 0 session_exec "$tmp/session-signal-quit" "$BIN" run --interactive "$ROOT/build/illegal"
 check session_signal_regs 0 session_exec "$tmp/session-signal-regs" "$BIN" run --interactive --changes-only "$ROOT/build/illegal"
+check session_signal_step 132 session_exec "$tmp/session-signal-step" "$BIN" run --interactive "$ROOT/build/illegal"
 check session_steps 0 session_exec "$tmp/session-steps" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_regs 0 session_exec "$tmp/session-regs" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
 check session_quit 0 session_exec "$tmp/session-quit" "$BIN" run --interactive "$ROOT/build/long_steps"
