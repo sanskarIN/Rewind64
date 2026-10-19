@@ -121,7 +121,19 @@ build/group_stop.o: tests/fixtures/group_stop.asm | build
 build/group_stop: build/group_stop.o
 	$(LD) -o $@ $<
 
-fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps build/illegal build/divzero build/exit42 build/handled_signal build/reexec build/group_stop
+build/thread_signal.o: tests/fixtures/thread_signal.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/thread_signal: build/thread_signal.o
+	$(LD) -o $@ $<
+
+build/exit_group.o: tests/fixtures/exit_group.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/exit_group: build/exit_group.o
+	$(LD) -o $@ $<
+
+fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps build/illegal build/divzero build/exit42 build/handled_signal build/reexec build/group_stop build/thread_signal build/exit_group
 
 test: all fixtures
 	bash tests/integration/test_cli.sh
