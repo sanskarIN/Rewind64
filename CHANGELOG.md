@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.3 - 2026-10-19 (experimental Linux prerelease)
+
+- Added interactive `stack` / `k`, a bounded **32-byte read-only stack inspection**: four 64-bit words starting from a freshly obtained RSP, using Linux `PTRACE_PEEKDATA`.
+- Handled Linux ptrace's ambiguous `-1` return by clearing and checking `errno` on each word; all-ones data remains valid, and unreadable addresses are reported non-fatally without resuming the tracee.
+- Added native NASM fixtures `stack_words.asm` (four known words, including all ones and zero) and `invalid_rsp.asm` (unmapped RSP after a single step; inspect then safely quit).
+- Expanded the Python-free Bash integration suite from **92 to 99 tests**, including initial stack, after-step and compact display, pending SIGILL, repeated reads, combined `code`/`stack` and invalid-address recovery.
+- Retained experimental Linux x86-64, one launched tracee, and Boost Software License 1.0. No arbitrary-address memory browsing, breakpoints, disassembler, historical recording or reverse execution.
+
 ## v0.2.2 - 2026-10-19 (experimental Linux prerelease)
 
 - Added native Assembly interactive `code` / `x` command for a **read-only eight-byte word at the tracee's current RIP**, using a fresh `PTRACE_GETREGS` followed by `PTRACE_PEEKTEXT`.
