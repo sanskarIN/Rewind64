@@ -65,7 +65,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.0-pre'; }
+version() { assert_contains version 'v0.2.1-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -379,6 +379,48 @@ session_group_stop() {
   assert_not_running session_group_stop
 }
 session_missing_exec() { assert_contains session_missing_exec 'execvp'; }
+session_status_start() {
+  assert_contains session_status_start 'Session status: pid=' &&
+  assert_contains session_status_start 'steps=0 pending_signal=0' &&
+  assert_contains session_status_start 'Interactive session ended;' &&
+  assert_not_running session_status_start
+}
+session_status_steps() {
+  assert_contains session_status_steps 'steps=2 pending_signal=0' &&
+  assert_contains session_status_steps 'Interactive steps completed: 2' &&
+  assert_count session_status_steps 'After step:' 2 &&
+  assert_not_running session_status_steps
+}
+session_signal_ill() {
+  assert_contains session_signal_ill 'Interactive signal stop: signal 4 pending' &&
+  assert_contains session_signal_ill 'steps=0 pending_signal=4' &&
+  assert_contains session_signal_ill 'Signal-delivery stop: signal 4' &&
+  assert_contains session_signal_ill 'Target terminated by signal 4' &&
+  assert_count session_signal_ill 'After step:' 0
+}
+session_signal_segv() {
+  assert_contains session_signal_segv 'Interactive signal stop: signal 11 pending' &&
+  assert_contains session_signal_segv 'steps=1 pending_signal=11' &&
+  assert_contains session_signal_segv 'Target terminated by signal 11' &&
+  assert_count session_signal_segv 'After step:' 1
+}
+session_signal_trap() {
+  assert_contains session_signal_trap 'Interactive signal stop: signal 5 pending' &&
+  assert_contains session_signal_trap 'steps=1 pending_signal=5' &&
+  assert_contains session_signal_trap 'Target terminated by signal 5'
+}
+session_signal_quit() {
+  assert_contains session_signal_quit 'Interactive signal stop: signal 4 pending' &&
+  assert_contains session_signal_quit 'steps=0 pending_signal=4' &&
+  assert_contains session_signal_quit 'Interactive session ended; tracee terminated and reaped.' &&
+  assert_not_running session_signal_quit
+}
+session_signal_regs() {
+  assert_contains session_signal_regs 'Interactive signal stop: signal 4 pending' &&
+  assert_contains session_signal_regs 'steps=0 pending_signal=4' &&
+  assert_count session_signal_regs '    GPR:' 1 &&
+  assert_not_running session_signal_regs
+}
 
 exits_zero_signals() {
   assert_contains exits_zero_signals 'Target exited with status 42' &&
@@ -398,10 +440,24 @@ printf 'quit\n' > "$tmp/session-quit"
 : > "$tmp/session-eof"
 printf 'help\ninvalid\nq\n' > "$tmp/session-help"
 printf 's\ns\ns\nq\n' > "$tmp/session-quit-steps"
+printf 'status\nq\n' > "$tmp/session-status-start"
+printf 's\ns\ni\nq\n' > "$tmp/session-status-steps"
+printf 'step\nstatus\ncontinue\n' > "$tmp/session-signal-ill"
+printf 'step\nstep\nstatus\ncontinue\n' > "$tmp/session-signal-segv"
+printf 'step\nstep\nstatus\ncontinue\n' > "$tmp/session-signal-trap"
+printf 'step\nstatus\nquit\n' > "$tmp/session-signal-quit"
+printf 'step\nregs\nstatus\nq\n' > "$tmp/session-signal-regs"
 
 check help 0 "$BIN" --help
 check version 0 "$BIN" --version
 check session_continue 7 session_exec "$tmp/session-continue" "$BIN" run --interactive "$ROOT/build/exit7"
+check session_status_start 0 session_exec "$tmp/session-status-start" "$BIN" run --interactive "$ROOT/build/long_steps"
+check session_status_steps 0 session_exec "$tmp/session-status-steps" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
+check session_signal_ill 132 session_exec "$tmp/session-signal-ill" "$BIN" run --interactive "$ROOT/build/illegal"
+check session_signal_segv 139 session_exec "$tmp/session-signal-segv" "$BIN" run --interactive "$ROOT/build/segv"
+check session_signal_trap 133 session_exec "$tmp/session-signal-trap" "$BIN" run --interactive "$ROOT/build/trap"
+check session_signal_quit 0 session_exec "$tmp/session-signal-quit" "$BIN" run --interactive "$ROOT/build/illegal"
+check session_signal_regs 0 session_exec "$tmp/session-signal-regs" "$BIN" run --interactive --changes-only "$ROOT/build/illegal"
 check session_steps 0 session_exec "$tmp/session-steps" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_regs 0 session_exec "$tmp/session-regs" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
 check session_quit 0 session_exec "$tmp/session-quit" "$BIN" run --interactive "$ROOT/build/long_steps"
