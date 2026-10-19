@@ -103,7 +103,13 @@ build/exit42.o: tests/fixtures/exit42.asm | build
 build/exit42: build/exit42.o
 	$(LD) -o $@ $<
 
-fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps build/illegal build/divzero build/exit42
+build/handled_signal.o: tests/fixtures/handled_signal.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/handled_signal: build/handled_signal.o
+	$(LD) -o $@ $<
+
+fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps build/illegal build/divzero build/exit42 build/handled_signal
 
 test: all fixtures
 	bash tests/integration/test_cli.sh
