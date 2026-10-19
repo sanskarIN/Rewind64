@@ -43,6 +43,7 @@ extern stdout
 %define SESSION_RETURN     (-684)        ; dword return after cleanup; 0 for quit
 %define SESSION_STEPPING   (-688)        ; dword: pending interactive single-step request
 %define INJECTED_SIGNAL    (-692)        ; dword: signal used by last ptrace resume
+%define CODE_WORD          (-704)        ; qword: PTRACE_PEEKTEXT result at current RIP
 %define SESSION_BUFFER     (-832)        ; 64-byte input buffer, -832..-769
 %define SESSION_BUF_SIZE    64
 %define SIGKILL            9
@@ -59,7 +60,8 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step | regs | status | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step | regs | status | code | continue | help | quit', 0
+    msg_code_word: db 'Code word at RIP=0x%016lx: 0x%016lx', 10, 0
     msg_session_status: db 'Session status: pid=%ld steps=%u pending_signal=%u', 10, 0
     msg_pending_signal: db 'Interactive signal stop: signal %u pending; choose step, continue or quit.', 10, 0
     msg_session_prompt: db 'rewind64> ', 0
@@ -69,12 +71,14 @@ section .rodata
     cmd_step: db 'step', 10, 0
     cmd_regs: db 'regs', 10, 0
     cmd_status: db 'status', 10, 0
+    cmd_code: db 'code', 10, 0
     cmd_continue: db 'continue', 10, 0
     cmd_quit: db 'quit', 10, 0
     cmd_help: db 'help', 10, 0
     cmd_short_step: db 's', 10, 0
     cmd_short_regs: db 'r', 10, 0
     cmd_short_status: db 'i', 10, 0
+    cmd_short_code: db 'x', 10, 0
     cmd_short_continue: db 'c', 10, 0
     cmd_short_quit: db 'q', 10, 0
     msg_step:      db 'After step:   pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
@@ -97,6 +101,7 @@ section .rodata
     err_options:   db 'ptrace(SETOPTIONS)', 0
     err_regs:      db 'ptrace(GETREGS)', 0
     err_siginfo:   db 'ptrace(GETSIGINFO)', 0
+    err_code_read: db 'ptrace(PEEKTEXT at RIP)', 0
     err_eventmsg:  db 'ptrace(GETEVENTMSG)', 0
     err_step:      db 'ptrace(SINGLESTEP)', 0
     err_cont:      db 'ptrace(CONT)', 0
@@ -114,7 +119,7 @@ section .text
 ; Stack frame holds pid, status, and two disjoint 216-byte register blocks.
 ; Previous snapshot -640..-425, siginfo -400..-273, new regs -256..-41.
 ; Event payload at -664..-657 is distinct from cleanup counters and CPU state.
-; Prompt control at -692..-677, text input at -832..-769.
+; Prompt control at -704..-677, text input at -832..-769.
 debug_run:
     push rbp
     mov rbp, rsp
@@ -305,6 +310,16 @@ debug_run:
     test eax, eax
     jz .session_status
     lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_code]
+    call strcmp
+    test eax, eax
+    jz .session_code
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_code]
+    call strcmp
+    test eax, eax
+    jz .session_code
+    lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_continue]
     call strcmp
     test eax, eax
@@ -349,6 +364,38 @@ debug_run:
     js .regs_failed
     lea rdi, [rbp+REGS]
     call print_registers        ; explicit regs always shows complete state
+    jmp .session_prompt
+.session_code:
+    ; Pure read-only instruction inspection for the current stopped tracee.
+    ; A PEEKTEXT return of -1 is valid when all eight bytes are 0xff.
+    ; errno MUST be cleared before ptrace and inspected only when rax=-1.
+    call .get_regs
+    cmp rax, -1
+    je .regs_failed
+    call __errno_location
+    mov dword [rax], 0
+    mov edi, PTRACE_PEEKTEXT
+    mov rsi, [rbp-16]
+    mov rdx, [rbp+REG_RIP]
+    xor ecx, ecx
+    xor eax, eax
+    call ptrace
+    mov [rbp+CODE_WORD], rax
+    cmp rax, -1
+    jne .session_code_print
+    call __errno_location
+    cmp dword [rax], 0
+    jne .session_code_failed
+.session_code_print:
+    lea rdi, [rel msg_code_word]
+    mov rsi, [rbp+REG_RIP]
+    mov rdx, [rbp+CODE_WORD]
+    xor eax, eax
+    call printf
+    jmp .session_prompt
+.session_code_failed:
+    lea rdi, [rel err_code_read]
+    call perror
     jmp .session_prompt
 .session_continue:
     ; If paused by a genuine signal-delivery stop, continue forwards
