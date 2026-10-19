@@ -58,8 +58,8 @@ check() {
 }
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
-help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N]'; }
-version() { assert_contains version 'v0.1.8-pre'; }
+help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only]' && assert_contains help 'without stepping'; }
+version() { assert_contains version 'v0.1.9-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -86,7 +86,7 @@ triple() {
   assert_contains triple 'Target exited with status 0'
 }
 forward_args() { assert_contains forward_args 'Target exited with status 0'; }
-usr1() { assert_contains usr1 'Target terminated by signal 10' && assert_contains usr1 'Signals forwarded: 1' && assert_contains usr1 'Signal-delivery stop: signal 10 si_code=0'; }
+usr1() { assert_contains usr1 'Target terminated by signal 10' && assert_contains usr1 'Signals forwarded: 1' && assert_contains usr1 'Signal-delivery stop: signal 10 si_code=0' && assert_contains usr1 'Signal sender: pid=' && assert_contains usr1 'uid='; }
 step_trap() {
   assert_count step_trap 'After step:' 1 &&
   assert_contains step_trap 'Steps completed: 1 / 5' &&
@@ -179,7 +179,8 @@ handled_signals() {
   assert_count handled_signals 'Signal-delivery stop: signal 10' 2 &&
   assert_contains handled_signals 'Signals forwarded: 2' &&
   assert_contains handled_signals 'Ptrace events: exec=0 exit=1' &&
-  assert_count handled_signals 'Signal-delivery stop: signal 10 si_code=0' 2
+  assert_count handled_signals 'Signal-delivery stop: signal 10 si_code=0' 2 &&
+  assert_count handled_signals 'Signal sender: pid=' 2
 }
 handled_compact() {
   assert_contains handled_compact 'Target exited with status 0' &&
@@ -237,7 +238,9 @@ early_exit_event() {
 thread_signal() {
   assert_contains thread_signal 'Signal-delivery stop: signal 10 si_code=-6' &&
   assert_contains thread_signal 'Signals forwarded: 1' &&
-  assert_contains thread_signal 'Target terminated by signal 10'
+  assert_contains thread_signal 'Target terminated by signal 10' &&
+  assert_contains thread_signal 'Signal sender: pid=' &&
+  assert_contains thread_signal 'uid='
 }
 thread_signal_compact() {
   assert_contains thread_signal_compact 'Signal-delivery stop: signal 10 si_code=-6' &&
@@ -255,6 +258,58 @@ exit_group_compact() {
   assert_contains exit_group_compact 'Ptrace exit detail: raw_wait=0x00001700' &&
   assert_count exit_group_compact '    GPR:' 0
 }
+# Observation mode skips single-stepping but continues through ptrace events.
+observe_exit0() {
+  assert_count observe_exit0 'Initial stop:' 1 &&
+  assert_count observe_exit0 'After step:' 0 &&
+  assert_count observe_exit0 'Register changes:' 0 &&
+  assert_contains observe_exit0 'Steps completed: 0 / 0' &&
+  assert_contains observe_exit0 'Ptrace events: exec=0 exit=1' &&
+  assert_contains observe_exit0 'Target exited with status 0'
+}
+observe_exit42() {
+  assert_count observe_exit42 'After step:' 0 &&
+  assert_contains observe_exit42 'Steps completed: 0 / 0' &&
+  assert_contains observe_exit42 'Target exited with status 42'
+}
+observe_compact() {
+  assert_count observe_compact '    GPR:' 0 &&
+  assert_count observe_compact 'After step:' 0 &&
+  assert_contains observe_compact 'Steps completed: 0 / 0' &&
+  assert_contains observe_compact 'Ptrace exit detail: raw_wait=0x00001700' &&
+  assert_contains observe_compact 'Target exited with status 23'
+}
+observe_reexec() {
+  assert_count observe_reexec 'After step:' 0 &&
+  assert_contains observe_reexec 'Steps completed: 0 / 0' &&
+  assert_contains observe_reexec 'Ptrace events: exec=1 exit=1' &&
+  assert_contains observe_reexec 'Target exited with status 42'
+}
+observe_handled() {
+  assert_count observe_handled 'After step:' 0 &&
+  assert_contains observe_handled 'Steps completed: 0 / 0' &&
+  assert_count observe_handled 'Signal-delivery stop: signal 10 si_code=0' 2 &&
+  assert_count observe_handled 'Signal sender: pid=' 2 &&
+  assert_contains observe_handled 'Signals forwarded: 2' &&
+  assert_contains observe_handled 'Target exited with status 0'
+}
+observe_user_signal() {
+  assert_count observe_user_signal 'After step:' 0 &&
+  assert_contains observe_user_signal 'Signal-delivery stop: signal 10 si_code=-6' &&
+  assert_contains observe_user_signal 'Signal sender: pid=' &&
+  assert_contains observe_user_signal 'Steps completed: 0 / 0' &&
+  assert_contains observe_user_signal 'Target terminated by signal 10'
+}
+observe_group_stop() {
+  assert_count observe_group_stop 'After step:' 0 &&
+  assert_contains observe_group_stop 'Error: job-control group stop is unsupported' &&
+  assert_not_running observe_group_stop
+}
+observe_args() {
+  assert_contains observe_args 'Steps completed: 0 / 0' &&
+  assert_contains observe_args 'Target exited with status 0'
+}
+conflict() { assert_contains conflict 'mutually exclusive'; }
 exits_zero_signals() {
   assert_contains exits_zero_signals 'Target exited with status 42' &&
   assert_contains exits_zero_signals 'Signals forwarded: 0' &&
@@ -298,6 +353,18 @@ check flag_usage 2 "$BIN" run --steps 3
 check illegal 132 "$BIN" run --steps 4 "$ROOT/build/illegal"
 check divide_fault 136 "$BIN" run --steps 5 "$ROOT/build/divzero"
 check exit42 42 "$BIN" run -- "$ROOT/build/exit42"
+check observe_exit0 0 "$BIN" run --observe-only "$ROOT/build/exit0"
+check observe_exit42 42 "$BIN" run --observe-only "$ROOT/build/exit42"
+check observe_compact 23 "$BIN" run --changes-only --observe-only "$ROOT/build/exit_group"
+check observe_reexec 42 "$BIN" run --observe-only "$ROOT/build/reexec" "$ROOT/build/exit42"
+check observe_handled 0 "$BIN" run --observe-only "$ROOT/build/handled_signal"
+check observe_user_signal 138 "$BIN" run --observe-only "$ROOT/build/thread_signal"
+check observe_group_stop 1 "$BIN" run --observe-only "$ROOT/build/group_stop"
+check observe_args 0 "$BIN" run --observe-only -- "$ROOT/build/argv" hello
+check conflict 2 "$BIN" run --observe-only --steps 2 "$ROOT/build/exit0"
+check conflict 2 "$BIN" run --steps 2 --observe-only "$ROOT/build/exit0"
+check duplicate 2 "$BIN" run --observe-only --observe-only "$ROOT/build/exit0"
+check flag_usage 2 "$BIN" run --observe-only
 check exit_group 23 "$BIN" run --steps 1 "$ROOT/build/exit_group"
 check exit_group_compact 23 "$BIN" run --changes-only "$ROOT/build/exit_group"
 check exits_zero_signals 42 "$BIN" run --steps 2 "$ROOT/build/exit42"
