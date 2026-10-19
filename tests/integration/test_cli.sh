@@ -65,7 +65,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.2-pre'; }
+version() { assert_contains version 'v0.2.3-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -425,6 +425,51 @@ session_signal_step() {
   assert_contains session_signal_step 'Signals forwarded: 1' &&
   assert_contains session_signal_step 'Target terminated by signal 4'
 }
+session_stack_initial() {
+  assert_count session_stack_initial 'Stack word [' 4 &&
+  assert_contains session_stack_initial 'Stack word [0] at ' &&
+  assert_contains session_stack_initial ': 0x0000000000000001' &&
+  assert_contains session_stack_initial 'Target exited with status 42'
+}
+session_stack_fixture() {
+  assert_count session_stack_fixture 'Stack word [' 4 &&
+  assert_contains session_stack_fixture ': 0x1122334455667788' &&
+  assert_contains session_stack_fixture ': 0xffffffffffffffff' &&
+  assert_contains session_stack_fixture ': 0x0000000000000000' &&
+  assert_contains session_stack_fixture ': 0x8899aabbccddeeff' &&
+  assert_contains session_stack_fixture 'Interactive steps completed: 1' &&
+  assert_not_running session_stack_fixture
+}
+session_stack_compact() {
+  assert_count session_stack_compact 'Stack word [' 4 &&
+  assert_count session_stack_compact '    GPR:' 0 &&
+  assert_contains session_stack_compact ': 0xffffffffffffffff' &&
+  assert_not_running session_stack_compact
+}
+session_stack_invalid() {
+  assert_contains session_stack_invalid 'ptrace(PEEKDATA at RSP)' &&
+  assert_count session_stack_invalid 'Stack word [' 0 &&
+  assert_contains session_stack_invalid 'steps=1 pending_signal=0' &&
+  assert_not_running session_stack_invalid
+}
+session_stack_signal() {
+  assert_contains session_stack_signal 'Interactive signal stop: signal 4 pending' &&
+  assert_count session_stack_signal 'Stack word [' 4 &&
+  assert_contains session_stack_signal 'steps=0 pending_signal=4' &&
+  assert_contains session_stack_signal 'Signals forwarded: 0' &&
+  assert_not_running session_stack_signal
+}
+session_stack_repeat() {
+  assert_count session_stack_repeat 'Stack word [' 8 &&
+  assert_contains session_stack_repeat 'Interactive steps completed: 0' &&
+  assert_not_running session_stack_repeat
+}
+session_stack_with_code() {
+  assert_count session_stack_with_code 'Code word at RIP=' 1 &&
+  assert_count session_stack_with_code 'Stack word [' 4 &&
+  assert_contains session_stack_with_code 'Interactive steps completed: 1' &&
+  assert_not_running session_stack_with_code
+}
 session_code() {
   assert_contains session_code 'Code word at RIP=0x' &&
   assert_contains session_code 'Target exited with status 42' &&
@@ -498,10 +543,24 @@ printf 'code\nquit\n' > "$tmp/session-code-all-ones"
 printf 'step\nx\nstatus\nquit\n' > "$tmp/session-code-signal"
 printf 'x\ncode\nc\n' > "$tmp/session-code-compact"
 printf 'code\nregs\ncontinue\n' > "$tmp/session-code-regs"
+printf 'stack\ncontinue\n' > "$tmp/session-stack-initial"
+printf 's\nk\nquit\n' > "$tmp/session-stack-fixture"
+printf 's\nstack\nquit\n' > "$tmp/session-stack-compact"
+printf 's\nstack\nstatus\nquit\n' > "$tmp/session-stack-invalid"
+printf 'step\nstack\nstatus\nquit\n' > "$tmp/session-stack-signal"
+printf 'stack\nk\nquit\n' > "$tmp/session-stack-repeat"
+printf 'code\ns\nstack\nq\n' > "$tmp/session-stack-with-code"
 
 check help 0 "$BIN" --help
 check version 0 "$BIN" --version
 check session_continue 7 session_exec "$tmp/session-continue" "$BIN" run --interactive "$ROOT/build/exit7"
+check session_stack_initial 42 session_exec "$tmp/session-stack-initial" "$BIN" run --interactive "$ROOT/build/exit42"
+check session_stack_fixture 0 session_exec "$tmp/session-stack-fixture" "$BIN" run --interactive "$ROOT/build/stack_words"
+check session_stack_compact 0 session_exec "$tmp/session-stack-compact" "$BIN" run --interactive --changes-only "$ROOT/build/stack_words"
+check session_stack_invalid 0 session_exec "$tmp/session-stack-invalid" "$BIN" run --interactive "$ROOT/build/invalid_rsp"
+check session_stack_signal 0 session_exec "$tmp/session-stack-signal" "$BIN" run --interactive "$ROOT/build/illegal"
+check session_stack_repeat 0 session_exec "$tmp/session-stack-repeat" "$BIN" run --interactive "$ROOT/build/exit0"
+check session_stack_with_code 0 session_exec "$tmp/session-stack-with-code" "$BIN" run --interactive "$ROOT/build/stack_words"
 check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"
