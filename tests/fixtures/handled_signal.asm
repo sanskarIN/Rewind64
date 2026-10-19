@@ -42,7 +42,17 @@ _start:
     test rax, rax
     js .error
 
-    cmp byte [rel handler_called], 1
+    ; Repeat a handled signal to exercise multiple ptrace delivery stops.
+    mov eax, SYS_GETPID
+    syscall
+    mov edi, eax
+    mov esi, SIGUSR1
+    mov eax, SYS_KILL
+    syscall
+    test rax, rax
+    js .error
+
+    cmp byte [rel handler_called], 2
     jne .error
     xor edi, edi
     jmp .exit
@@ -54,7 +64,7 @@ _start:
     syscall
 
 handle_usr1:
-    mov byte [rel handler_called], 1
+    inc byte [rel handler_called]
     ret
 
 signal_restorer:
