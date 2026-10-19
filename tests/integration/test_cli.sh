@@ -65,7 +65,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.3-pre'; }
+version() { assert_contains version 'v0.2.4-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -425,6 +425,66 @@ session_signal_step() {
   assert_contains session_signal_step 'Signals forwarded: 1' &&
   assert_contains session_signal_step 'Target terminated by signal 4'
 }
+memory_word() {
+  assert_contains memory_word 'Memory word at 0x' &&
+  assert_contains memory_word ': 0x1122334455667788' &&
+  assert_contains memory_word 'Interactive session ended;' &&
+  assert_count memory_word 'Memory word at 0x' 1 &&
+  assert_not_running memory_word
+}
+memory_all_ones() {
+  assert_contains memory_all_ones 'Memory word at 0x' &&
+  assert_contains memory_all_ones ': 0xffffffffffffffff' &&
+  assert_count memory_all_ones 'Memory word at 0x' 1 &&
+  assert_not_running memory_all_ones
+}
+memory_uppercase() {
+  assert_contains memory_uppercase 'Memory word at 0x' &&
+  assert_contains memory_uppercase ': 0x1122334455667788' &&
+  assert_not_running memory_uppercase
+}
+memory_repeated() {
+  assert_count memory_repeated 'Memory word at 0x' 2 &&
+  assert_contains memory_repeated ': 0x1122334455667788' &&
+  assert_contains memory_repeated ': 0xffffffffffffffff' &&
+  assert_contains memory_repeated 'Interactive steps completed: 1' &&
+  assert_not_running memory_repeated
+}
+memory_unmapped() {
+  assert_contains memory_unmapped 'ptrace(PEEKDATA at address)' &&
+  assert_contains memory_unmapped 'steps=0 pending_signal=0' &&
+  assert_count memory_unmapped 'Memory word at 0x' 0 &&
+  assert_not_running memory_unmapped
+}
+memory_high_unmapped() {
+  assert_contains memory_high_unmapped 'ptrace(PEEKDATA at address)' &&
+  assert_count memory_high_unmapped 'Memory word at 0x' 0 &&
+  assert_not_running memory_high_unmapped
+}
+memory_invalid() {
+  assert_count memory_invalid 'Usage: mem 0xHEX' 8 &&
+  assert_count memory_invalid 'Memory word at 0x' 0 &&
+  assert_contains memory_invalid 'Interactive session ended;' &&
+  assert_not_running memory_invalid
+}
+memory_signal() {
+  assert_contains memory_signal 'Interactive signal stop: signal 4 pending' &&
+  assert_contains memory_signal 'Memory word at 0x' &&
+  assert_contains memory_signal 'steps=0 pending_signal=4' &&
+  assert_contains memory_signal 'Signals forwarded: 0' &&
+  assert_not_running memory_signal
+}
+memory_compact() {
+  assert_count memory_compact 'Memory word at 0x' 1 &&
+  assert_count memory_compact '    GPR:' 0 &&
+  assert_contains memory_compact 'Target exited with status 0'
+}
+memory_combo() {
+  assert_count memory_combo 'Memory word at 0x' 1 &&
+  assert_count memory_combo 'Code word at RIP=' 1 &&
+  assert_count memory_combo 'Stack word [' 4 &&
+  assert_not_running memory_combo
+}
 session_stack_initial() {
   assert_count session_stack_initial 'Stack word [' 4 &&
   assert_contains session_stack_initial 'Stack word [0] at ' &&
@@ -551,9 +611,40 @@ printf 'step\nstack\nstatus\nquit\n' > "$tmp/session-stack-signal"
 printf 'stack\nk\nquit\n' > "$tmp/session-stack-repeat"
 printf 'code\ns\nstack\nq\n' > "$tmp/session-stack-with-code"
 
+# Resolve addresses from symbols in the native ELF fixtures rather than
+# assuming fixed link addresses; no Python or hardcoded ASLR assumptions.
+memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
+illegal_entry="$(nm -n "$ROOT/build/illegal" | awk '$3 == "_start" {print $1; exit}')"
+if [[ ! "$memory_base" =~ ^[[:xdigit:]]{1,16}$ || ! "$illegal_entry" =~ ^[[:xdigit:]]{1,16}$ ]]; then
+  printf 'Missing valid NASM fixture symbols for memory tests\\n' >&2
+  exit 1
+fi
+printf -v memory_second '%016x' "$((16#$memory_base + 8))"
+memory_upper="$(printf '%s' "$memory_base" | tr 'abcdef' 'ABCDEF')"
+printf 'mem 0x%s\\nquit\\n' "$memory_base" > "$tmp/memory-word"
+printf 'm 0x%s\\nquit\\n' "$memory_second" > "$tmp/memory-all-ones"
+printf 'mem 0X%s\\nquit\\n' "$memory_upper" > "$tmp/memory-uppercase"
+printf 'step\\nmem 0x%s\\nm 0x%s\\nquit\\n' "$memory_base" "$memory_second" > "$tmp/memory-repeated"
+printf 'mem 0x0\\nstatus\\nquit\\n' > "$tmp/memory-unmapped"
+printf 'mem 0xffffffffffffffff\\nquit\\n' > "$tmp/memory-high-unmapped"
+printf 'mem 0x\\nmem 0xG\\nmem 0x1234567890abcdef0\\nmem -1\\nm 0x1z\\nmem 0x1  \\nmem 1234\\nm 0x\\nquit\\n' > "$tmp/memory-invalid"
+printf 'step\\nmem 0x%s\\nstatus\\nquit\\n' "$illegal_entry" > "$tmp/memory-signal"
+printf 'mem 0x%s\\ncontinue\\n' "$memory_base" > "$tmp/memory-compact"
+printf 'code\\nmem 0x%s\\nstack\\nquit\\n' "$memory_base" > "$tmp/memory-combo"
+
 check help 0 "$BIN" --help
 check version 0 "$BIN" --version
 check session_continue 7 session_exec "$tmp/session-continue" "$BIN" run --interactive "$ROOT/build/exit7"
+check memory_word 0 session_exec "$tmp/memory-word" "$BIN" run --interactive "$ROOT/build/stack_words"
+check memory_all_ones 0 session_exec "$tmp/memory-all-ones" "$BIN" run --interactive "$ROOT/build/stack_words"
+check memory_uppercase 0 session_exec "$tmp/memory-uppercase" "$BIN" run --interactive "$ROOT/build/stack_words"
+check memory_repeated 0 session_exec "$tmp/memory-repeated" "$BIN" run --interactive "$ROOT/build/stack_words"
+check memory_unmapped 0 session_exec "$tmp/memory-unmapped" "$BIN" run --interactive "$ROOT/build/exit0"
+check memory_high_unmapped 0 session_exec "$tmp/memory-high-unmapped" "$BIN" run --interactive "$ROOT/build/exit0"
+check memory_invalid 0 session_exec "$tmp/memory-invalid" "$BIN" run --interactive "$ROOT/build/exit0"
+check memory_signal 0 session_exec "$tmp/memory-signal" "$BIN" run --interactive "$ROOT/build/illegal"
+check memory_compact 0 session_exec "$tmp/memory-compact" "$BIN" run --interactive --changes-only "$ROOT/build/stack_words"
+check memory_combo 0 session_exec "$tmp/memory-combo" "$BIN" run --interactive "$ROOT/build/stack_words"
 check session_stack_initial 42 session_exec "$tmp/session-stack-initial" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_stack_fixture 0 session_exec "$tmp/session-stack-fixture" "$BIN" run --interactive "$ROOT/build/stack_words"
 check session_stack_compact 0 session_exec "$tmp/session-stack-compact" "$BIN" run --interactive --changes-only "$ROOT/build/stack_words"
