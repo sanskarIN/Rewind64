@@ -59,7 +59,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N]'; }
-version() { assert_contains version 'v0.1.6-pre'; }
+version() { assert_contains version 'v0.1.7-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -199,6 +199,33 @@ reexec_compact() {
   assert_contains reexec_compact 'Signals forwarded: 0' &&
   assert_count reexec_compact '    GPR:' 0
 }
+group_stop() {
+  assert_contains group_stop 'Signal-delivery stop: signal 19' &&
+  assert_contains group_stop 'Error: job-control group stop is unsupported' &&
+  assert_not_running group_stop
+}
+group_stop_compact() {
+  assert_contains group_stop_compact 'Error: job-control group stop is unsupported' &&
+  assert_count group_stop_compact '    GPR:' 0 &&
+  assert_not_running group_stop_compact
+}
+group_stop_midstep() {
+  assert_contains group_stop_midstep 'Error: job-control group stop is unsupported' &&
+  assert_not_running group_stop_midstep
+}
+assert_not_running() {
+  local label="$1" pid
+  if [[ "$output" =~ Initial[[:space:]]stop:[[:space:]]pid=([0-9]+) ]]; then
+    pid="${BASH_REMATCH[1]}"
+  else
+    printf 'FAIL %s: missing target pid in trace output\n' "$label" >&2
+    return 1
+  fi
+  if kill -0 "$pid" 2>/dev/null; then
+    printf 'FAIL %s: traced child %s survived failed debugger cleanup\n' "$label" "$pid" >&2
+    return 1
+  fi
+}
 early_exit_event() {
   assert_contains early_exit_event 'Target exited with status 0' &&
   assert_contains early_exit_event 'Steps completed: 2 / 64' &&
@@ -248,6 +275,9 @@ check exits_zero_signals 42 "$BIN" run --steps 2 "$ROOT/build/exit42"
 check reexec 42 "$BIN" run --steps 1 "$ROOT/build/reexec" "$ROOT/build/exit42"
 check reexec_compact 42 "$BIN" run --changes-only --steps 3 "$ROOT/build/reexec" "$ROOT/build/exit42"
 check early_exit_event 0 "$BIN" run --steps 64 "$ROOT/build/exit0"
+check group_stop 1 "$BIN" run "$ROOT/build/group_stop"
+check group_stop_compact 1 "$BIN" run --changes-only "$ROOT/build/group_stop"
+check group_stop_midstep 1 "$BIN" run --steps 64 "$ROOT/build/group_stop"
 cp -- "$ROOT/build/exit42" "$tmp/--dash-program"
 PATH="$tmp:$PATH" check dashed_target 42 "$BIN" run -- --dash-program
 for bad in 0 -1 abc 65 99999999999 1x; do
