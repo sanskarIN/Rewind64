@@ -32,11 +32,11 @@ section .rodata
                     db '  N must be 1..64; default N=1.', 10
                     db '  --observe-only captures initial state and follows events without stepping.', 10
                     db '  --steps, --observe-only and --interactive are mutually exclusive.', 10
-                    db '  --interactive supports step, regs, status, continue, help, quit.', 10
+                    db '  --interactive supports step, regs, status, code, continue, help, quit.', 10
                     db '  --changes-only hides repeated full register tables, not CPU deltas.', 10
                     db '  -- ends option parsing (use for programs beginning with --).', 10
                     db 'Only Linux x86-64 run is implemented.', 0
-    version_text:   db 'Rewind64 v0.2.1-pre (Linux x86-64)', 0
+    version_text:   db 'Rewind64 v0.2.2-pre (Linux x86-64)', 0
     usage_error:    db 'Error: expected rewind64 run [--steps N | --observe-only | --interactive] [--changes-only] [--] PROGRAM [ARGS...].', 0
     steps_error:    db 'Error: steps must be in range 1..64 (decimal digits only).', 0
     options_error:  db 'Error: duplicate option; each run flag may be specified once.', 0
