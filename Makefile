@@ -139,7 +139,19 @@ build/all_ones.o: tests/fixtures/all_ones.asm | build
 build/all_ones: build/all_ones.o
 	$(LD) -o $@ $<
 
-fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps build/illegal build/divzero build/exit42 build/handled_signal build/reexec build/group_stop build/thread_signal build/exit_group build/all_ones
+build/stack_words.o: tests/fixtures/stack_words.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/stack_words: build/stack_words.o
+	$(LD) -o $@ $<
+
+build/invalid_rsp.o: tests/fixtures/invalid_rsp.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/invalid_rsp: build/invalid_rsp.o
+	$(LD) -o $@ $<
+
+fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps build/illegal build/divzero build/exit42 build/handled_signal build/reexec build/group_stop build/thread_signal build/exit_group build/all_ones build/stack_words build/invalid_rsp
 
 test: all fixtures
 	bash tests/integration/test_cli.sh
