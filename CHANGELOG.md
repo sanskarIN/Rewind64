@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.1 - 2026-10-19 (experimental Linux prerelease)
+
+- Interactive `step` now pauses at verified application signal-delivery stops (including SIGILL, SIGSEGV, and SIGTRAP), preserving the pending signal and allowing register inspection or explicit next action.
+- Added interactive `status` / `i` command displaying PID, completed instruction steps and pending signal, without restarting the tracee.
+- Interactive `continue` and `step` inject a pending signal exactly once on a successful ptrace resume request; `quit`/EOF cleans up without injecting it.
+- Corrected `Signals forwarded: N` to count successful nonzero-signal ptrace resume requests, rather than merely detected signals awaiting a user choice. Ptrace exec/exit events clear stale interactive stepping state.
+- Expanded Bash/native Assembly regression coverage to **86 cases**, including pending fatal signals, injected/undelivered signal accounting, `status`, signal-stop CPU inspection and tracee cleanup.
+- All executable debugger logic and fixtures remain native NASM x86-64, with no Python dependency; retain Boost Software License 1.0 and experimental Linux x86-64 scope.
+- Recording, reverse execution, breakpoints, process attach, and Windows/macOS support remain unimplemented.
+
 ## v0.2.0 - 2026-10-19 (experimental Linux prerelease)
 
 - Added an Assembly-implemented `--interactive` debugger mode for one launched Linux x86-64 tracee, with `step`/`s`, `regs`/`r`, `continue`/`c`, `help`, and `quit`/`q` commands.
