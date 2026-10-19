@@ -2,11 +2,11 @@
 
 ## v0.1.9 development — 2026-10-19
 
-- Target: experimental Linux x86-64 prerelease v0.1.9 (not stable).
+- **Published:** [v0.1.9 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.9), not stable. Clean NASM release build/tests, SHA-256 packaging and publishing succeeded: https://github.com/sanskarIN/Rewind64/actions/runs/39227105042 .
 - Added `run --observe-only PROGRAM [ARGS...]` in the NASM command parser, mutually exclusive with `--steps N`. The Linux debugger samples registers at the initial exec stop then issues zero single-step requests, continuing directly to observe signal and process lifecycle events through normal exit/termination.
 - Opt-in observation mode works with `--changes-only` and `--` and emits `Steps completed: 0 / 0`. Default forward stepping 1..64 remains unchanged.
 - For user-originated `siginfo_t.si_code=SI_USER` and `SI_TKILL`, report sender PID/UID from the correct Linux siginfo union offsets; kernel fault signals are not misinterpreted as sender metadata.
-- Added 12 Python-free Bash integration checks (49 to 61), including normal and nonzero exits, exec replacement, handled and fatal signals, unsupported group stops, flag exclusivity and argument forwarding. **61/61 native NASM/Bash checks passed on Ubuntu 22.04 and 24.04**: https://github.com/sanskarIN/Rewind64/actions/runs/39226668582 .
+- Added 12 Python-free Bash integration checks (49 to 61), including normal and nonzero exits, exec replacement, handled and fatal signals, unsupported group stops, flag exclusivity and argument forwarding. **61/61 native NASM/Bash checks passed on Ubuntu 22.04 and 24.04** on PR and merged main: https://github.com/sanskarIN/Rewind64/actions/runs/39226991290 .
 - No Python code, multi-process tracing, recording, reverse execution or deterministic replay added; Boost Software License 1.0 retained.
 
 ## v0.1.8 development — 2026-10-19
