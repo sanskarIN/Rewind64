@@ -1,5 +1,15 @@
 # Rewind64 development progress
 
+## v0.2.1 interactive signal hardening — 2026-10-19
+
+- Target: **v0.2.1 experimental Linux x86-64 prerelease**, building on v0.2.0's NASM interactive command loop; no stable release or Windows backend claim.
+- Fixed a behavior that automatically continued when `PTRACE_SINGLESTEP` encountered a genuine application signal. Interactive mode now reports the stop, preserves the pending signal and returns to the prompt, allowing `regs`, `status`, `step`, `continue` or `quit`.
+- Implemented `status` (alias `i`) with PID, successfully completed interactive instruction steps, and pending signal number; improved printed interactive command help accordingly.
+- Pending signals are forwarded **once** via successful `PTRACE_SINGLESTEP` or `PTRACE_CONT` requests; `quit` or EOF clean up without forwarding. The `Signals forwarded: N` counter is now incremented only after a successful nonzero-signal ptrace resume request, fixing earlier over-counting of inspected-but-undelivered signals.
+- Reset interactive step state when transitioning through kernel exec/exit events, retaining automatic event continuation where appropriate.
+- Expanded the Python-free integration suite from 78 to **86 tests**. Native NASM/ELF builds and **86/86 Bash tests passed** on Ubuntu 22.04 and 24.04: https://github.com/sanskarIN/Rewind64/actions/runs/39234598210 .
+- Retained Boost Software License 1.0, author email `sanskarin@outlook.in`, one launched Linux x86-64 tracee, and no recording/reverse execution, attach, breakpoints or comprehensive job-control tracing.
+
 ## v0.2.0 interactive Linux development — 2026-10-19
 
 - **Published:** [v0.2.0 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.0); not stable. Native NASM build, integration tests, archive, SHA-256 checksums and public prerelease publishing passed: https://github.com/sanskarIN/Rewind64/actions/runs/39231018860 . The Windows x86-64 backend was deferred to a future milestone.
