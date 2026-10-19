@@ -59,7 +59,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N]'; }
-version() { assert_contains version 'v0.1.5-pre'; }
+version() { assert_contains version 'v0.1.6-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -72,7 +72,9 @@ zero() {
   assert_contains zero '    Changed RIP:' &&
   assert_contains zero 'Steps completed: 1 / 1' &&
   assert_contains zero 'Target exited with status 0' &&
-  assert_contains zero 'Signals forwarded: 0'
+  assert_contains zero 'Signals forwarded: 0' &&
+  assert_contains zero 'Ptrace exit event:' &&
+  assert_contains zero 'Ptrace events: exec=0 exit=1'
 }
 seven() { assert_contains seven 'Target exited with status 7'; }
 trap_signal() { assert_contains trap_signal 'Target terminated by signal 5'; }
@@ -174,17 +176,38 @@ handled_signals() {
   assert_contains handled_signals 'Target exited with status 0' &&
   assert_contains handled_signals 'Steps completed: 2 / 2' &&
   assert_count handled_signals 'Signal-delivery stop: signal 10' 2 &&
-  assert_contains handled_signals 'Signals forwarded: 2'
+  assert_contains handled_signals 'Signals forwarded: 2' &&
+  assert_contains handled_signals 'Ptrace events: exec=0 exit=1'
 }
 handled_compact() {
   assert_contains handled_compact 'Target exited with status 0' &&
   assert_count handled_compact '    GPR:' 0 &&
   assert_count handled_compact 'Signal-delivery stop: signal 10' 2 &&
-  assert_contains handled_compact 'Signals forwarded: 2'
+  assert_contains handled_compact 'Signals forwarded: 2' &&
+  assert_contains handled_compact 'Ptrace events: exec=0 exit=1'
+}
+reexec() {
+  assert_contains reexec 'Ptrace exec event:' &&
+  assert_contains reexec 'Ptrace exit event:' &&
+  assert_contains reexec 'Ptrace events: exec=1 exit=1' &&
+  assert_contains reexec 'Signals forwarded: 0' &&
+  assert_contains reexec 'Target exited with status 42'
+}
+reexec_compact() {
+  assert_contains reexec_compact 'Ptrace events: exec=1 exit=1' &&
+  assert_contains reexec_compact 'Target exited with status 42' &&
+  assert_contains reexec_compact 'Signals forwarded: 0' &&
+  assert_count reexec_compact '    GPR:' 0
+}
+early_exit_event() {
+  assert_contains early_exit_event 'Target exited with status 0' &&
+  assert_contains early_exit_event 'Steps completed: 2 / 64' &&
+  assert_contains early_exit_event 'Ptrace events: exec=0 exit=1'
 }
 exits_zero_signals() {
   assert_contains exits_zero_signals 'Target exited with status 42' &&
-  assert_contains exits_zero_signals 'Signals forwarded: 0'
+  assert_contains exits_zero_signals 'Signals forwarded: 0' &&
+  assert_contains exits_zero_signals 'Ptrace events: exec=0 exit=1'
 }
 
 
@@ -222,6 +245,9 @@ check illegal 132 "$BIN" run --steps 4 "$ROOT/build/illegal"
 check divide_fault 136 "$BIN" run --steps 5 "$ROOT/build/divzero"
 check exit42 42 "$BIN" run -- "$ROOT/build/exit42"
 check exits_zero_signals 42 "$BIN" run --steps 2 "$ROOT/build/exit42"
+check reexec 42 "$BIN" run --steps 1 "$ROOT/build/reexec" "$ROOT/build/exit42"
+check reexec_compact 42 "$BIN" run --changes-only --steps 3 "$ROOT/build/reexec" "$ROOT/build/exit42"
+check early_exit_event 0 "$BIN" run --steps 64 "$ROOT/build/exit0"
 cp -- "$ROOT/build/exit42" "$tmp/--dash-program"
 PATH="$tmp:$PATH" check dashed_target 42 "$BIN" run -- --dash-program
 for bad in 0 -1 abc 65 99999999999 1x; do
