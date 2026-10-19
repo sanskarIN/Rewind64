@@ -13,6 +13,7 @@ Rewind64 is an experimental, local-first, open-source native program inspection 
 - Observe the post-`exec` stop; inspect all 16 x86-64 general-purpose registers, RIP, RFLAGS, and FS/GS base addresses via `PTRACE_GETREGS`; and perform **up to 64** `PTRACE_SINGLESTEP` operations requested by the CLI.
 - Compare the 20 displayed register fields before/after each successful instruction step, show changed 64-bit values and a change count; snapshots remain in debugger-local memory (no trace recording). **`--changes-only` suppresses verbose full register tables** without suppressing the state changes.
 - Verify the expected initial exec-time `SIGTRAP` before tracing. Continue and wait for target exit; report normal exit status or terminating signal, actual completed step count, and the **observed signal-delivery stop count**; forward subsequent application signals.
+- Use `PTRACE_O_TRACEEXEC` and `PTRACE_O_TRACEEXIT` to observe in-process image replacement and process exit. Classify synthetic ptrace event stops by event number rather than forwarding them as application SIGTRAP, and report separate exec/exit event counters.
 - Request `PTRACE_O_EXITKILL` and kill/reap the child on detected debugger errors to reduce stranded tracee risk.
 - Linux NASM source, **Assembly-native fixtures**, Bash integration checks, and GitHub Actions CI on Ubuntu 22.04 and 24.04; **Python is not used**.
 
@@ -52,7 +53,7 @@ Built executable: `build/rewind64`. A checksum-verified native Linux archive is 
 ./build/rewind64 run /path/to/your/authorized/program arg1 arg2
 ```
 
-The `run` command waits for an `exec` stop, prints initial general-purpose register values, RIP, RSP, RFLAGS and FS/GS base addresses, executes up to the requested number of instructions (default one), and prints a register snapshot **and register-value deltas** after each completed step. With `--changes-only`, it omits the repeated full register tables but retains stop headers and register deltas. It then continues execution, reporting actual completed steps and `Signals forwarded: N` (observed ptrace signal stops, not a guarantee a handler ran) at termination. **It does not offer interactive stepping, breakpoints, memory reading, reverse execution, or trace recording.** Commands such as `attach`, `trace`, and `replay` report unsupported-command errors.
+The `run` command waits for an `exec` stop, prints initial general-purpose register values, RIP, RSP, RFLAGS and FS/GS base addresses, executes up to the requested number of instructions (default one), and prints a register snapshot **and register-value deltas** after each completed step. With `--changes-only`, it omits the repeated full register tables but retains stop headers and register deltas. It then continues execution, reporting actual completed steps, `Signals forwarded: N` (observed ptrace signal stops), and `Ptrace events: exec=N exit=N` at termination. These counters are diagnostics, not process history. **It does not offer interactive stepping, breakpoints, memory reading, reverse execution, or trace recording.** Commands such as `attach`, `trace`, and `replay` report unsupported-command errors.
 
 The debugger exits with the target's normal status (0–255) when possible, or `128 + signal` on signal termination. A debugger error returns 1; a CLI argument error returns 2. These can overlap a target's chosen exit status; structured result codes are planned. A target failing to execute prints a diagnostic and exits with status 127; the pre-exec child failure is not reported as a successful trace.
 
@@ -62,7 +63,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for ABI notes and current modul
 
 ## Roadmap
 
-1. **v0.1.0:** First experimental Linux process inspection prerelease; **v0.1.1:** bounded stepping and Python-free tests; **v0.1.2:** full register presentation, step accounting, and expanded Linux CI; **v0.1.3:** forward-only register deltas and lifecycle regression tests; **v0.1.4:** opt-in concise CPU deltas, CLI flag ordering, initial-stop checks, and extended fault regressions; **v0.1.5:** signal-delivery diagnostics and repeated handled-signal tests.
+1. **v0.1.0:** First experimental Linux process inspection prerelease; **v0.1.1:** bounded stepping and Python-free tests; **v0.1.2:** full register presentation, step accounting, and expanded Linux CI; **v0.1.3:** forward-only register deltas and lifecycle regression tests; **v0.1.4:** opt-in concise CPU deltas, CLI flag ordering, initial-stop checks, and extended fault regressions; **v0.1.5:** signal-delivery diagnostics and repeated handled-signal tests; **v0.1.6:** ptrace exec/exit event classification and re-exec regression tests.
 2. **v0.2.0:** Investigate and implement a verified Windows x86-64 backend.
 3. **v0.3.0:** Investigate macOS Intel debugging APIs and entitlements.
 4. **v0.4.0:** Platform abstraction, memory inspection, breakpoint management, and interactive stepping.
