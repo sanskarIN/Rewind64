@@ -1,5 +1,14 @@
 # Rewind64 development progress
 
+## v0.1.8 development — 2026-10-19
+
+- Target: **experimental Linux x86-64 prerelease v0.1.8**; not stable.
+- Implemented `PTRACE_GETEVENTMSG` decoding at Linux `PTRACE_EVENT_EXIT` stops in NASM and displayed the event-time `raw_wait` word, distinct from final reaped `waitpid` status.
+- Reported signed `siginfo_t.si_code` for validated signal-delivery stops. The diagnostic can distinguish `SI_USER=0` from thread-directed `SI_TKILL=-6`.
+- Added `tests/fixtures/thread_signal.asm` (native `tgkill`) and `tests/fixtures/exit_group.asm` (native `exit_group`) plus Bash integration checks for raw wait-status values, signal codes, regular/compact display, and in-process re-exec.
+- Retained Python-free native NASM binaries, Bash/Make test orchestration, single-process Linux x86-64 experimental scope, and Boost Software License 1.0. No interactive debugger or reverse-execution claim.
+- Successful initial CI checks: https://github.com/sanskarIN/Rewind64/actions/runs/39224695477 .
+
 ## v0.1.7 development — 2026-10-19
 
 - **Published:** [v0.1.7 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.7), not stable. Native NASM build and 45 Bash tests passed, and release archive/checksums were published: https://github.com/sanskarIN/Rewind64/actions/runs/39219765675 .
