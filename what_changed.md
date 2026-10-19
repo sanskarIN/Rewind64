@@ -2,10 +2,10 @@
 
 ## v0.1.5 development — 2026-10-19
 
-- Release target: **v0.1.5 experimental Linux x86-64 prerelease**; not stable.
+- **Published v0.1.5 experimental Linux x86-64 prerelease:** https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.5 . The clean NASM prerelease build, archive checksum and artifact publication succeeded: https://github.com/sanskarIN/Rewind64/actions/runs/39201835241 .
 - Added NASM-only signal-delivery stop diagnostics and per-process `Signals forwarded: N` accounting for bounded stepping and later continuation, without adding a high-level debugger implementation.
 - Added `tests/fixtures/handled_signal.asm` with a direct Linux `rt_sigaction` handler for SIGUSR1, two signal sends, `rt_sigreturn`, and a successful exit only if both handler calls occurred.
-- Expanded Bash integration suite from 36 to **39 cases**, including repeated signal delivery, compact-mode output, and signal-stop counters for SIGTERM/SIGTRAP/SIGSEGV and normal exits.
+- Expanded Bash integration suite from 36 to **39 cases**, including repeated signal delivery, compact-mode output, and signal-stop counters for SIGTERM/SIGTRAP/SIGSEGV and normal exits. **39/39 tests passed** on Ubuntu 22.04 and 24.04: https://github.com/sanskarIN/Rewind64/actions/runs/39201756511 .
 - Observed and fixed a test-only version mismatch (the first CI execution reported 38 passed, one version failure). The code identified itself as v0.1.5 after correction.
 - Python is excluded from the source and test runtime. The project remains single-tracee Linux x86-64 without replay, reverse stepping, recording, or multi-process support.
 
