@@ -65,7 +65,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.1-pre'; }
+version() { assert_contains version 'v0.2.2-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -425,6 +425,39 @@ session_signal_step() {
   assert_contains session_signal_step 'Signals forwarded: 1' &&
   assert_contains session_signal_step 'Target terminated by signal 4'
 }
+session_code() {
+  assert_contains session_code 'Code word at RIP=0x' &&
+  assert_contains session_code 'Target exited with status 42' &&
+  assert_contains session_code 'Interactive steps completed: 0'
+}
+session_code_alias() {
+  assert_count session_code_alias 'Code word at RIP=0x' 2 &&
+  assert_contains session_code_alias 'Interactive steps completed: 1' &&
+  assert_count session_code_alias 'After step:' 1 &&
+  assert_contains session_code_alias 'Target exited with status 0'
+}
+session_code_all_ones() {
+  assert_contains session_code_all_ones ': 0xffffffffffffffff' &&
+  assert_contains session_code_all_ones 'Interactive session ended; tracee terminated and reaped.' &&
+  assert_not_running session_code_all_ones
+}
+session_code_signal() {
+  assert_contains session_code_signal 'Interactive signal stop: signal 4 pending' &&
+  assert_contains session_code_signal 'Code word at RIP=0x' &&
+  assert_contains session_code_signal 'steps=0 pending_signal=4' &&
+  assert_contains session_code_signal 'Signals forwarded: 0' &&
+  assert_not_running session_code_signal
+}
+session_code_compact() {
+  assert_count session_code_compact 'Code word at RIP=0x' 2 &&
+  assert_count session_code_compact '    GPR:' 0 &&
+  assert_contains session_code_compact 'Target exited with status 23'
+}
+session_code_regs() {
+  assert_count session_code_regs 'Code word at RIP=0x' 1 &&
+  assert_count session_code_regs '    GPR:' 1 &&
+  assert_contains session_code_regs 'Target exited with status 0'
+}
 session_signal_regs() {
   assert_contains session_signal_regs 'Interactive signal stop: signal 4 pending' &&
   assert_contains session_signal_regs 'steps=0 pending_signal=4' &&
@@ -459,10 +492,22 @@ printf 'step\nstep\nstatus\ncontinue\n' > "$tmp/session-signal-trap"
 printf 'step\nstatus\nquit\n' > "$tmp/session-signal-quit"
 printf 'step\nregs\nstatus\nq\n' > "$tmp/session-signal-regs"
 printf 'step\nstatus\nstep\n' > "$tmp/session-signal-step"
+printf 'code\ncontinue\n' > "$tmp/session-code"
+printf 'code\ns\nx\ncontinue\n' > "$tmp/session-code-alias"
+printf 'code\nquit\n' > "$tmp/session-code-all-ones"
+printf 'step\nx\nstatus\nquit\n' > "$tmp/session-code-signal"
+printf 'x\ncode\nc\n' > "$tmp/session-code-compact"
+printf 'code\nregs\ncontinue\n' > "$tmp/session-code-regs"
 
 check help 0 "$BIN" --help
 check version 0 "$BIN" --version
 check session_continue 7 session_exec "$tmp/session-continue" "$BIN" run --interactive "$ROOT/build/exit7"
+check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
+check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
+check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"
+check session_code_signal 0 session_exec "$tmp/session-code-signal" "$BIN" run --interactive "$ROOT/build/illegal"
+check session_code_compact 23 session_exec "$tmp/session-code-compact" "$BIN" run --interactive --changes-only "$ROOT/build/exit_group"
+check session_code_regs 0 session_exec "$tmp/session-code-regs" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
 check session_status_start 0 session_exec "$tmp/session-status-start" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_status_steps 0 session_exec "$tmp/session-status-steps" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
 check session_signal_ill 132 session_exec "$tmp/session-signal-ill" "$BIN" run --interactive "$ROOT/build/illegal"
