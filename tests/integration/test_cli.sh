@@ -59,7 +59,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N]'; }
-version() { assert_contains version 'v0.1.4-pre'; }
+version() { assert_contains version 'v0.1.5-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -71,7 +71,8 @@ zero() {
   assert_contains zero 'Register changes: ' &&
   assert_contains zero '    Changed RIP:' &&
   assert_contains zero 'Steps completed: 1 / 1' &&
-  assert_contains zero 'Target exited with status 0'
+  assert_contains zero 'Target exited with status 0' &&
+  assert_contains zero 'Signals forwarded: 0'
 }
 seven() { assert_contains seven 'Target exited with status 7'; }
 trap_signal() { assert_contains trap_signal 'Target terminated by signal 5'; }
@@ -82,11 +83,12 @@ triple() {
   assert_contains triple 'Target exited with status 0'
 }
 forward_args() { assert_contains forward_args 'Target exited with status 0'; }
-usr1() { assert_contains usr1 'Target terminated by signal 10'; }
+usr1() { assert_contains usr1 'Target terminated by signal 10' && assert_contains usr1 'Signals forwarded: 1'; }
 step_trap() {
   assert_count step_trap 'After step:' 1 &&
   assert_contains step_trap 'Steps completed: 1 / 5' &&
-  assert_contains step_trap 'Target terminated by signal 5'
+  assert_contains step_trap 'Target terminated by signal 5' &&
+  assert_contains step_trap 'Signals forwarded: 1'
 }
 early_exit() {
   assert_count early_exit 'After step:' 2 &&
@@ -116,12 +118,15 @@ exit255() {
 }
 term_signal() {
   assert_contains term_signal 'Target terminated by signal 15' &&
-  assert_contains term_signal 'Steps completed: 2 / 2'
+  assert_contains term_signal 'Steps completed: 2 / 2' &&
+  assert_contains term_signal 'Signal-delivery stop: signal 15' &&
+  assert_contains term_signal 'Signals forwarded: 1'
 }
 segfault() {
   assert_contains segfault 'Target terminated by signal 11' &&
   assert_contains segfault 'Steps completed: 1 / 5' &&
-  assert_count segfault '    Changed RIP:' 1
+  assert_count segfault '    Changed RIP:' 1 &&
+  assert_contains segfault 'Signals forwarded: 1'
 }
 max_steps() {
   assert_count max_steps 'After step:' 64 &&
@@ -165,6 +170,23 @@ divide_fault() {
 }
 exit42() { assert_contains exit42 'Target exited with status 42'; }
 dashed_target() { assert_contains dashed_target 'Target exited with status 42'; }
+handled_signals() {
+  assert_contains handled_signals 'Target exited with status 0' &&
+  assert_contains handled_signals 'Steps completed: 2 / 2' &&
+  assert_count handled_signals 'Signal-delivery stop: signal 10' 2 &&
+  assert_contains handled_signals 'Signals forwarded: 2'
+}
+handled_compact() {
+  assert_contains handled_compact 'Target exited with status 0' &&
+  assert_count handled_compact '    GPR:' 0 &&
+  assert_count handled_compact 'Signal-delivery stop: signal 10' 2 &&
+  assert_contains handled_compact 'Signals forwarded: 2'
+}
+exits_zero_signals() {
+  assert_contains exits_zero_signals 'Target exited with status 42' &&
+  assert_contains exits_zero_signals 'Signals forwarded: 0'
+}
+
 
 
 # Run tests directly to avoid interpreting executable arguments in a shell.
@@ -179,6 +201,8 @@ check missing_exec 127 "$BIN" run /definitely-not-a-real-rewind64-program
 check triple 0 "$BIN" run --steps 3 "$ROOT/build/argv" hello
 check forward_args 0 "$BIN" run --steps 2 "$ROOT/build/argv" hello
 check usr1 138 "$BIN" run "$ROOT/build/signal_usr1"
+check handled_signals 0 "$BIN" run --steps 2 "$ROOT/build/handled_signal"
+check handled_compact 0 "$BIN" run --changes-only --steps 2 "$ROOT/build/handled_signal"
 check step_trap 133 "$BIN" run --steps 5 "$ROOT/build/trap"
 check early_exit 0 "$BIN" run --steps 64 "$ROOT/build/exit0"
 check registers 0 "$BIN" run --steps 4 "$ROOT/build/register_fixture"
@@ -197,6 +221,7 @@ check flag_usage 2 "$BIN" run --steps 3
 check illegal 132 "$BIN" run --steps 4 "$ROOT/build/illegal"
 check divide_fault 136 "$BIN" run --steps 5 "$ROOT/build/divzero"
 check exit42 42 "$BIN" run -- "$ROOT/build/exit42"
+check exits_zero_signals 42 "$BIN" run --steps 2 "$ROOT/build/exit42"
 cp -- "$ROOT/build/exit42" "$tmp/--dash-program"
 PATH="$tmp:$PATH" check dashed_target 42 "$BIN" run -- --dash-program
 for bad in 0 -1 abc 65 99999999999 1x; do
