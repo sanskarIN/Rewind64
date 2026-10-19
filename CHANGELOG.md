@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.8 - 2026-10-19 (experimental prerelease)
+
+- Read `PTRACE_GETEVENTMSG` at `PTRACE_EVENT_EXIT` stops and display the kernel's raw wait-status payload before final process termination.
+- Report signed `siginfo_t.si_code` for valid signal-delivery stops, distinguishing user-sent and thread-directed signals.
+- Added pure NASM fixtures for self-directed `tgkill` (`SI_TKILL=-6`) and `exit_group(23)`; extended Bash tests for raw exit status, re-exec, signed signal codes, and concise output.
+- No Python code or runtime dependency; native Linux x86-64 NASM tests run on Ubuntu 22.04 and 24.04.
+- Remains single-tracee experimental software without recording, interactive control, or reverse execution.
+
 ## v0.1.7 - 2026-10-19 (experimental prerelease)
 
 - Classified Linux job-control group stops using `PTRACE_GETSIGINFO` / `EINVAL` to prevent repeatedly reinjecting `SIGSTOP` into a stopped tracee. Unsupported group stops now return a tracing error and trigger cleanup.
