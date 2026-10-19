@@ -24,6 +24,7 @@ extern print_register_changes
 %define PTRACE_GETREGS     12
 %define PTRACE_SETOPTIONS  0x4200
 %define PTRACE_GETSIGINFO  0x4202
+%define PTRACE_GETEVENTMSG 0x4201  ; unsigned long ptrace event payload
 %define PTRACE_O_EXITKILL  0x00100000
 %define PTRACE_O_TRACEEXEC 0x00000010
 %define PTRACE_O_TRACEEXIT 0x00000040
@@ -32,6 +33,7 @@ extern print_register_changes
 %define EXEC_EVENTS        (-648)        ; outside previous register snapshot
 %define EXIT_EVENTS        (-652)
 %define CLEANUP_STOPS      (-656)        ; bounded reap loop state
+%define EVENT_MESSAGE      (-664)        ; qword event payload; non-overlapping
 %define SIGKILL            9
 %define SIGTRAP            5
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
@@ -50,10 +52,11 @@ section .rodata
     msg_exit:      db 'Target exited with status %d', 10, 0
     msg_signal:    db 'Target terminated by signal %d', 10, 0
     msg_steps:     db 'Steps completed: %d / %d', 10, 0
-    msg_signal_stop: db 'Signal-delivery stop: signal %d', 10, 0
+    msg_signal_stop: db 'Signal-delivery stop: signal %d si_code=%d', 10, 0
     msg_stop_total:  db 'Signals forwarded: %d', 10, 0
     msg_exec_event:  db 'Ptrace exec event: pid=%ld', 10, 0
     msg_exit_event:  db 'Ptrace exit event: pid=%ld', 10, 0
+    msg_exit_detail: db 'Ptrace exit detail: raw_wait=0x%08lx', 10, 0
     msg_event_total: db 'Ptrace events: exec=%u exit=%u', 10, 0
     err_event:      db 'Error: unsupported ptrace event %u', 10, 0
     msg_other_trap: db 'Unexpected SIGTRAP si_code=%d during step', 10, 0
@@ -64,6 +67,7 @@ section .rodata
     err_options:   db 'ptrace(SETOPTIONS)', 0
     err_regs:      db 'ptrace(GETREGS)', 0
     err_siginfo:   db 'ptrace(GETSIGINFO)', 0
+    err_eventmsg:  db 'ptrace(GETEVENTMSG)', 0
     err_step:      db 'ptrace(SINGLESTEP)', 0
     err_cont:      db 'ptrace(CONT)', 0
     err_stop:      db 'Error: child did not enter expected ptrace stop.', 0
@@ -76,10 +80,11 @@ section .text
 ; step_limit is CLI-validated in the inclusive range 1..64.
 ; Stack frame holds pid, status, and two disjoint 216-byte register blocks.
 ; Previous snapshot -640..-425, siginfo -400..-273, new regs -256..-41.
+; Event payload at -664..-657 is distinct from cleanup counters and CPU state.
 debug_run:
     push rbp
     mov rbp, rsp
-    sub rsp, 656
+    sub rsp, 672
     mov [rbp-8], rdi              ; argv vector from CLI
     mov dword [rbp-264], esi      ; requested maximum steps
     mov dword [rbp-40], edx       ; compact register display flag
@@ -293,6 +298,13 @@ debug_run:
     jmp .event_print
 .observed_exit:
     inc dword [rbp+EXIT_EVENTS]
+    call .get_event_message
+    cmp rax, -1
+    je .eventmsg_failed
+    lea rdi, [rel msg_exit_detail]
+    mov rsi, [rbp+EVENT_MESSAGE]
+    xor eax, eax
+    call printf
     lea rdi, [rel msg_exit_event]
 .event_print:
     mov rsi, [rbp-16]
@@ -344,6 +356,7 @@ debug_run:
     inc dword [rbp+SIGNAL_STOPS]
     lea rdi, [rel msg_signal_stop]
     mov esi, [rbp-36]
+    mov edx, [rbp+SIGINFO+8]      ; signed si_code; e.g. SI_USER=0, SI_TKILL=-6
     xor eax, eax
     call printf
     add rsp, 8
@@ -422,6 +435,18 @@ debug_run:
     call ptrace
     add rsp, 8
     ret
+; Linux PTRACE_GETEVENTMSG places a machine word at the supplied address;
+; for TRACEEXIT it is the kernel's pending raw wait status.
+.get_event_message:
+    sub rsp, 8
+    mov edi, PTRACE_GETEVENTMSG
+    mov rsi, [rbp-16]
+    xor edx, edx
+    lea rcx, [rbp+EVENT_MESSAGE]
+    xor eax, eax
+    call ptrace
+    add rsp, 8
+    ret
 .print_regs:
     sub rsp, 8
     mov rsi, [rbp-16]
@@ -453,6 +478,9 @@ debug_run:
     jmp .cleanup_errno
 .siginfo_failed:
     lea rdi, [rel err_siginfo]
+    jmp .cleanup_errno
+.eventmsg_failed:
+    lea rdi, [rel err_eventmsg]
     jmp .cleanup_errno
 .step_failed:
     lea rdi, [rel err_step]
