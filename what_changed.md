@@ -1,5 +1,15 @@
 # Rewind64 development progress
 
+## v0.2.2 code-word inspection — 2026-10-19
+
+- Target: **v0.2.2 experimental Linux x86-64 prerelease**, adding a small, read-only memory inspection capability while preserving the Assembly-only debugger.
+- Added `code` / `x` to the native NASM interactive command loop. The command refreshes the register snapshot and reads one eight-byte word at the current stopped RIP via `PTRACE_PEEKTEXT`; it prints the address and word without modifying registers, memory or pending signals.
+- Correctly disambiguated a valid all-ones `ptrace` word (return `-1`) from a failure by resetting `errno` before the read and checking it after `-1`. Genuine peek errors are reported without terminating the interactive debugger.
+- Added `tests/fixtures/all_ones.asm`, whose first eight code bytes are exactly `0xffffffffffffffff`; tests inspect but **never resume the invalid instruction stream**.
+- Expanded Python-free Bash tests from 86 to **92**: code inspection at initial RIP, after a step, in compact mode, with explicit register inspection, at a pending SIGILL stop, and with an all-ones ptrace word.
+- Native NASM/ELF CI passed **92/92** tests on Ubuntu 22.04 and 24.04: https://github.com/sanskarIN/Rewind64/actions/runs/39264567127 .
+- Scope remains Linux x86-64 single-tracee experimental. No arbitrary-address memory browsing, disassembly, breakpoint management, recording, reverse stepping, deterministic replay or Windows/macOS backend. Boost Software License 1.0 and author email `sanskarin@outlook.in` retained.
+
 ## v0.2.1 interactive signal hardening — 2026-10-19
 
 - **Published:** [v0.2.1 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.1), not stable. Clean native NASM build and Bash tests, SHA-256 archive packaging and release publishing passed: https://github.com/sanskarIN/Rewind64/actions/runs/39235173579 .
