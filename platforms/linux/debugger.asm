@@ -16,6 +16,11 @@ extern puts
 extern __errno_location
 extern print_registers
 extern print_register_changes
+extern fgets
+extern strcmp
+extern fflush
+extern stdin
+extern stdout
 
 %define PTRACE_TRACEME     0
 %define PTRACE_PEEKTEXT    1
@@ -34,6 +39,10 @@ extern print_register_changes
 %define EXIT_EVENTS        (-652)
 %define CLEANUP_STOPS      (-656)        ; bounded reap loop state
 %define EVENT_MESSAGE      (-664)        ; qword event payload; non-overlapping
+%define SESSION_MODE       (-680)        ; dword interactive mode from CLI
+%define SESSION_RETURN     (-684)        ; dword return after cleanup; 0 for quit
+%define SESSION_BUFFER     (-832)        ; 64-byte input buffer, -832..-769
+%define SESSION_BUF_SIZE    64
 %define SIGKILL            9
 %define SIGTRAP            5
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
@@ -48,6 +57,20 @@ extern print_register_changes
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
+    msg_session_intro: db 'Interactive session: step | regs | continue | help | quit', 0
+    msg_session_prompt: db 'rewind64> ', 0
+    msg_session_unknown: db 'Unknown session command. Type help.', 0
+    msg_session_quit: db 'Interactive session ended; tracee terminated and reaped.', 0
+    msg_session_steps: db 'Interactive steps completed: %u', 10, 0
+    cmd_step: db 'step', 10, 0
+    cmd_regs: db 'regs', 10, 0
+    cmd_continue: db 'continue', 10, 0
+    cmd_quit: db 'quit', 10, 0
+    cmd_help: db 'help', 10, 0
+    cmd_short_step: db 's', 10, 0
+    cmd_short_regs: db 'r', 10, 0
+    cmd_short_continue: db 'c', 10, 0
+    cmd_short_quit: db 'q', 10, 0
     msg_step:      db 'After step:   pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
     msg_exit:      db 'Target exited with status %d', 10, 0
     msg_signal:    db 'Target terminated by signal %d', 10, 0
@@ -76,20 +99,25 @@ section .rodata
     err_reap:      db 'Error: cleanup exhausted ptrace stop budget.', 0
 
 section .text
-; debug_run(argv, step_limit, changes_only) => target status; 1 on tracing error.
+; debug_run(argv, step_limit, changes_only, interactive) => target status;
+; interactive=1 uses an Assembly command prompt at the initial exec stop.
+; quit/EOF returns 0 after best-effort child shutdown; debugger errors return 1.
 ; changes_only affects display only; kernel state capture and delta logic unchanged.
 ; step_limit is CLI-validated in the inclusive range 1..64, or exactly 0
 ; in --observe-only mode (initial snapshot and ptrace events; no single-step).
 ; Stack frame holds pid, status, and two disjoint 216-byte register blocks.
 ; Previous snapshot -640..-425, siginfo -400..-273, new regs -256..-41.
 ; Event payload at -664..-657 is distinct from cleanup counters and CPU state.
+; Prompt control at -684..-677, text input at -832..-769.
 debug_run:
     push rbp
     mov rbp, rsp
-    sub rsp, 672
+    sub rsp, 864
     mov [rbp-8], rdi              ; argv vector from CLI
     mov dword [rbp-264], esi      ; requested maximum steps
     mov dword [rbp-40], edx       ; compact register display flag
+    mov dword [rbp+SESSION_MODE], ecx
+    mov dword [rbp+SESSION_RETURN], 1
     mov dword [rbp-272], 0        ; completed steps
     mov dword [rbp+SIGNAL_STOPS], 0 ; observed signal-delivery stops
     mov dword [rbp+EXEC_EVENTS], 0
@@ -131,6 +159,8 @@ debug_run:
     lea rdi, [rel msg_initial]
     call .print_regs
     call .save_regs             ; persist previous state before stepping
+    cmp dword [rbp+SESSION_MODE], 0
+    jne .session_entry
     ; Opt-in observation mode samples initial registers but performs no
     ; PTRACE_SINGLESTEP requests; continue and observe events to termination.
     cmp dword [rbp-264], 0
@@ -198,12 +228,94 @@ debug_run:
     call print_register_changes
     call .save_regs             ; make current state the next baseline
     inc dword [rbp-272]
+    cmp dword [rbp+SESSION_MODE], 0
+    jne .session_prompt
     mov eax, [rbp-272]
     cmp eax, [rbp-264]
     jl .step_loop
 
     mov dword [rbp-36], 0                ; synthetic single-step SIGTRAP must not be delivered
     jmp .resume
+.session_entry:
+    lea rdi, [rel msg_session_intro]
+    call puts
+.session_prompt:
+    lea rdi, [rel msg_session_prompt]
+    xor eax, eax
+    call printf
+    mov rdi, [rel stdout]
+    call fflush
+    lea rdi, [rbp+SESSION_BUFFER]
+    mov esi, SESSION_BUF_SIZE
+    mov rdx, [rel stdin]
+    call fgets
+    test rax, rax
+    jz .session_quit             ; EOF = safe, explicit shutdown
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_step]
+    call strcmp
+    test eax, eax
+    jz .step_loop
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_step]
+    call strcmp
+    test eax, eax
+    jz .step_loop
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_regs]
+    call strcmp
+    test eax, eax
+    jz .session_regs
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_regs]
+    call strcmp
+    test eax, eax
+    jz .session_regs
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_continue]
+    call strcmp
+    test eax, eax
+    jz .session_continue
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_continue]
+    call strcmp
+    test eax, eax
+    jz .session_continue
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_quit]
+    call strcmp
+    test eax, eax
+    jz .session_quit
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_quit]
+    call strcmp
+    test eax, eax
+    jz .session_quit
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_help]
+    call strcmp
+    test eax, eax
+    jz .session_entry
+    lea rdi, [rel msg_session_unknown]
+    call puts
+    jmp .session_prompt
+.session_regs:
+    call .get_regs
+    test eax, eax
+    js .regs_failed
+    lea rdi, [rbp+REGS]
+    call print_registers        ; explicit regs always shows complete state
+    jmp .session_prompt
+.session_continue:
+    mov dword [rbp-36], 0
+    jmp .resume
+.session_quit:
+    lea rdi, [rel msg_session_quit]
+    call puts
+    call .print_step_count
+    mov dword [rbp+SESSION_RETURN], 0
+    jmp .cleanup
+
 .unexpected_trap_code:
     lea rdi, [rel msg_other_trap]
     mov esi, [rbp+SIGINFO+8]
@@ -387,11 +499,20 @@ debug_run:
 ; Reports completed steps and signals forwarded when a tracee exits.
 .print_step_count:
     sub rsp, 8
+    cmp dword [rbp+SESSION_MODE], 0
+    je .bounded_summary
+    lea rdi, [rel msg_session_steps]
+    mov esi, [rbp-272]
+    xor eax, eax
+    call printf
+    jmp .other_summary
+.bounded_summary:
     lea rdi, [rel msg_steps]
     mov esi, [rbp-272]
     mov edx, [rbp-264]
     xor eax, eax
     call printf
+.other_summary:
     lea rdi, [rel msg_stop_total]
     mov esi, [rbp+SIGNAL_STOPS]
     xor eax, eax
@@ -558,7 +679,7 @@ debug_run:
     mov esi, SIGKILL
     call kill                   ; bounded best-effort fallback
 .cleanup_done:
-    mov eax, 1
+    mov eax, [rbp+SESSION_RETURN]
 .done:
     leave
     ret
