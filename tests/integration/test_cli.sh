@@ -17,7 +17,13 @@ run_case() {
   local name="$1" expected="$2"
   shift 2
   status=0
-  output="$(timeout --signal=TERM --kill-after=1s 10s "$@" 2>&1)" || status=$?
+  if [[ "${1:-}" == session_exec ]]; then
+    # Bash helpers cannot be execve'd by timeout; the helper times out the
+    # real debugger subprocess after applying stdin redirection.
+    output="$(session_exec "${@:2}" 2>&1)" || status=$?
+  else
+    output="$(timeout --signal=TERM --kill-after=1s 10s "$@" 2>&1)" || status=$?
+  fi
   if [[ "$status" -ne "$expected" ]]; then
     printf 'FAIL %-29s expected exit %s, got %s\n%s\n' "$name" "$expected" "$status" "$output" >&2
     return 1
@@ -316,7 +322,7 @@ conflict() { assert_contains conflict 'mutually exclusive'; }
 session_exec() {
   local commands="$1"
   shift
-  "$@" < "$commands"
+  timeout --signal=TERM --kill-after=1s 10s "$@" < "$commands"
 }
 session_continue() {
   assert_contains session_continue 'Interactive session:' &&
