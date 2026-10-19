@@ -4,7 +4,7 @@
 
 Rewind64 is an experimental, local-first, open-source native program inspection and debugger project. Its executable debugger logic is written in **x86-64 Assembly**. The first implementation targets **Linux x86-64 only**. Windows, macOS, recording, historical state navigation, and deterministic replay are roadmap items, **not implemented features**.
 
-> **Current published release:** [v0.1.9 experimental prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.9), Linux x86-64 only. This version adds optional zero-step process observation, user-signal sender PID/UID diagnostics, and Python-free CI on Ubuntu 22.04/24.04. No stable release or reversible execution is claimed. Debug only programs you own or have permission to debug. Recorded process state, once recording is implemented, may contain sensitive data.
+> **Current published release:** [v0.2.0 experimental prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.0), Linux x86-64 only. This version introduces the Assembly-implemented interactive session (step/regs/continue/help/quit), with Python-free CI on Ubuntu 22.04/24.04. No stable release or reversible execution is claimed. Debug only programs you own or have permission to debug. Recorded process state, once recording is implemented, may contain sensitive data.
 
 ## Implemented
 
@@ -42,7 +42,7 @@ make fixtures
 make test
 ```
 
-Built executable: `build/rewind64`. A checksum-verified native Linux archive is available on the [v0.1.9 release page](https://github.com/sanskarIN/Rewind64/releases/tag/v0.1.9). Build output is untracked. CI assembles canonical source with NASM, tests the result, and uploads a short-retention experimental binary on the [Actions page](https://github.com/sanskarIN/Rewind64/actions). Do not infer binary compatibility across OSes.
+Built executable: `build/rewind64`. A checksum-verified native Linux archive is available on the [v0.2.0 release page](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.0). Build output is untracked. CI assembles canonical source with NASM, tests the result, and uploads a short-retention experimental binary on the [Actions page](https://github.com/sanskarIN/Rewind64/actions). Do not infer binary compatibility across OSes.
 
 ## Usage
 
