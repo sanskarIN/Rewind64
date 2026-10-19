@@ -29,6 +29,7 @@ extern print_register_changes
 %define SIGTRAP            5
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
 %define TRAP_BRKPT         1              ; also used for syscall-step on Linux
+%define SIGNAL_STOPS       (-28)         ; distinct from child wait status
 %define STATUS             (-24)
 %define SIGINFO            (-400)         ; 128-byte siginfo_t, non-overlapping
 %define PREVREGS           (-640)         ; prior 216-byte snapshot: -640..-425
@@ -42,6 +43,8 @@ section .rodata
     msg_exit:      db 'Target exited with status %d', 10, 0
     msg_signal:    db 'Target terminated by signal %d', 10, 0
     msg_steps:     db 'Steps completed: %d / %d', 10, 0
+    msg_signal_stop: db 'Signal-delivery stop: signal %d', 10, 0
+    msg_stop_total:  db 'Signals forwarded: %d', 10, 0
     msg_other_trap: db 'Unexpected SIGTRAP si_code=%d during step', 10, 0
     err_fork:      db 'fork', 0
     err_trace:     db 'ptrace(TRACEME)', 0
@@ -68,6 +71,7 @@ debug_run:
     mov dword [rbp-264], esi      ; requested maximum steps
     mov dword [rbp-40], edx       ; compact register display flag
     mov dword [rbp-272], 0        ; completed steps
+    mov dword [rbp+SIGNAL_STOPS], 0 ; observed signal-delivery stops
     call fork
     test eax, eax
     js .fork_failed
@@ -180,6 +184,7 @@ debug_run:
     shr eax, 8
     and eax, 0xff
     mov [rbp-36], eax
+    call .report_signal_stop
 .resume:
     mov edi, PTRACE_CONT
     mov rsi, [rbp-16]
@@ -226,6 +231,7 @@ debug_run:
     shr eax, 8
     and eax, 0xff
     mov [rbp-36], eax
+    call .report_signal_stop
     ; After the single-step trap, later signals belong to the target.
     ; In particular, do not swallow application-generated SIGTRAP.
     jmp .resume
@@ -266,12 +272,28 @@ debug_run:
     mov edi, 126
     call _exit
 
-; Reports completed, not requested, steps when a tracee exits early.
+; Reports signal-delivery stops before injecting the signal into the tracee.
+; The count is observational, not a per-signal-handling guarantee.
+.report_signal_stop:
+    sub rsp, 8
+    inc dword [rbp+SIGNAL_STOPS]
+    lea rdi, [rel msg_signal_stop]
+    mov esi, [rbp-36]
+    xor eax, eax
+    call printf
+    add rsp, 8
+    ret
+
+; Reports completed steps and signals forwarded when a tracee exits.
 .print_step_count:
     sub rsp, 8
     lea rdi, [rel msg_steps]
     mov esi, [rbp-272]
     mov edx, [rbp-264]
+    xor eax, eax
+    call printf
+    lea rdi, [rel msg_stop_total]
+    mov esi, [rbp+SIGNAL_STOPS]
     xor eax, eax
     call printf
     add rsp, 8
