@@ -2,12 +2,12 @@
 
 ## v0.2.4 strict single-word memory inspection — 2026-10-19
 
-- Target: **v0.2.4 experimental Linux x86-64 prerelease**, extending the existing NASM interactive debugger with one-word, read-only memory inspection at an explicitly supplied address of the tracee launched by Rewind64.
+- **Published:** [v0.2.4 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.4), not stable. Fresh native NASM build, 109 integration tests, Linux archive packaging and SHA-256 checksum publication succeeded: https://github.com/sanskarIN/Rewind64/actions/runs/39277396958 .
 - Added `mem 0xHEX` / `m 0xHEX` in `platforms/linux/debugger.asm`. The NASM address parser accepts a `0x` / `0X` prefix and 1–16 hex digits, rejects signs, malformed/trailing input and overflow without resuming the tracee, and performs exactly one `PTRACE_PEEKDATA` read per valid command.
 - Clears `errno` before each ptrace read and distinguishes a legitimate `0xffffffffffffffff` word from a failed `-1` return. Errors (including unmapped/invalid addresses) are nonfatal to the interactive command loop; pending signals remain pending.
 - Expanded Python-free Bash test coverage from 99 to **109 tests** using `nm` to resolve `words` and `_start` in native Assembly ELF fixtures, testing known values, all-ones, uppercase hexadecimal input, malformed/overflow values, unmapped and high addresses, repeated reads, concise mode, and inspection during pending SIGILL.
 - All executable debugging behavior remains written in NASM Assembly. No Python files or dependencies; existing Boost Software License 1.0, Linux x86-64 scope, and author email `sanskarin@outlook.in` are retained.
-- **109/109 native integration checks passed** on Ubuntu 22.04 and 24.04 in first CI run: https://github.com/sanskarIN/Rewind64/actions/runs/39276600529 .
+- **109/109 native integration checks passed** on Ubuntu 22.04 and 24.04 on the final pull request and merged main: https://github.com/sanskarIN/Rewind64/actions/runs/39277396999 .
 - This is not memory writing, a memory dump service, a disassembler, a breakpoint manager, trace recording, reverse stepping, multi-process following, Windows/macOS support, or stable release.
 
 ## v0.2.3 bounded stack inspection — 2026-10-19
