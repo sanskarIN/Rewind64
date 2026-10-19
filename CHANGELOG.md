@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.7 - 2026-10-19 (experimental prerelease)
+
+- Classified Linux job-control group stops using `PTRACE_GETSIGINFO` / `EINVAL` to prevent repeatedly reinjecting `SIGSTOP` into a stopped tracee. Unsupported group stops now return a tracing error and trigger cleanup.
+- Fixed cleanup to drain ptrace wait stops, including synthetic `PTRACE_EVENT_EXIT`, after `SIGKILL`, before treating the child as reaped.
+- Bounded abnormal-stop processing with a stop budget to avoid endless ptrace cleanup cycles; pathological scenarios remain best-effort.
+- Added a pure NASM `SIGSTOP` regression fixture plus Python-free Bash tests verifying ordinary, compact and mid-step group-stop handling and that the child PID no longer runs.
+- Verified 45 Bash integration checks on Ubuntu 22.04 and Ubuntu 24.04 with native NASM/ELF builds.
+- Retained Boost Software License 1.0 and experimental, single-tracee Linux x86-64 scope.
+
 ## v0.1.6 - 2026-10-19 (experimental prerelease)
 
 - Enabled Linux `PTRACE_O_TRACEEXEC` / `PTRACE_O_TRACEEXIT` with the existing `PTRACE_O_EXITKILL` option.
