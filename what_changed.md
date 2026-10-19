@@ -2,11 +2,11 @@
 
 ## v0.2.3 bounded stack inspection — 2026-10-19
 
-- Target: **v0.2.3 experimental Linux x86-64 prerelease**. This milestone adds native NASM read-only inspection at the current RSP, without arbitrary-address memory tools.
+- **Published:** [v0.2.3 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.3), not stable. Native NASM build/tests, Linux archive packaging and SHA-256 checksum upload passed: https://github.com/sanskarIN/Rewind64/actions/runs/39271480022 .
 - Added `stack` / `k` interactive command. It calls `PTRACE_GETREGS` to refresh RSP and prints four 64-bit words at `RSP`, `RSP+8`, `RSP+16`, and `RSP+24` using `PTRACE_PEEKDATA`, for a strict maximum of 32 bytes per command. No tracee state is changed.
 - Before each peek, resets `errno`; a return of `-1` is only a failure if `errno` is nonzero, allowing valid `0xffffffffffffffff` words. Invalid or unreadable RSP addresses produce a nonfatal error, do not inject signals, and leave the tracee stopped.
 - Added pure NASM `tests/fixtures/stack_words.asm` for predictable RSP contents (including all-ones and zero words) and `tests/fixtures/invalid_rsp.asm` for unmapped-stack recovery. The invalid-RSP fixture is inspected then quit while stopped, not resumed.
-- Expanded Python-free Bash suite from 92 to **99 tests** covering initial, post-step, compact, pending SIGILL, alias/repeat, combined code/stack, and invalid RSP behaviors. **99/99 native tests passed on Ubuntu 22.04 and 24.04**: https://github.com/sanskarIN/Rewind64/actions/runs/39270835507 .
+- Expanded Python-free Bash suite from 92 to **99 tests** covering initial, post-step, compact, pending SIGILL, alias/repeat, combined code/stack, and invalid RSP behaviors. **99/99 native tests passed on Ubuntu 22.04 and 24.04** on the final PR head and merged main: https://github.com/sanskarIN/Rewind64/actions/runs/39271304135 .
 - Retained Linux x86-64 only, one tracee, Boost Software License 1.0 and commit email `sanskarin@outlook.in`. No arbitrary memory address parser, disassembler, breakpoint management, recording, reverse stepping, replay or Windows/macOS support.
 
 ## v0.2.2 code-word inspection — 2026-10-19
