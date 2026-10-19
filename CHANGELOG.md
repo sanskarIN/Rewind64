@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.4 - 2026-10-19 (experimental Linux prerelease)
+
+- Added interactive `mem 0xHEX` / `m 0xHEX`, reading **one eight-byte word** at a specified address in the explicitly launched tracee through `PTRACE_PEEKDATA`. This is read-only; there is no arbitrary process attachment, dump or write support.
+- Implemented a strict NASM hex parser allowing a `0x`/`0X` prefix and 1–16 hexadecimal digits; rejects missing digits, extra digits, overflow, signs, trailing whitespace and malformed values without resuming the tracee.
+- Uses `errno`-safe ptrace handling for valid all-ones data and returns to the prompt after unmapped-address errors, preserving pending signal delivery.
+- Expanded Python-free Bash integration coverage from **99 to 109** black-box cases using `nm`-resolved native Assembly fixture symbols; verifies mapped words, all-ones values, uppercase hex syntax, malformed values, unreadable pointers, repeated reads, compact mode, pending SIGILL, and compatibility with code/stack inspection.
+- Retained Boost Software License 1.0, NASM debugger and native fixtures, and Linux x86-64 single-tracee experimental scope. No disassembly, breakpoints, reverse execution, recording or deterministic replay.
+
 ## v0.2.3 - 2026-10-19 (experimental Linux prerelease)
 
 - Added interactive `stack` / `k`, a bounded **32-byte read-only stack inspection**: four 64-bit words starting from a freshly obtained RSP, using Linux `PTRACE_PEEKDATA`.
