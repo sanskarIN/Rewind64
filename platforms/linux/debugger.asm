@@ -31,6 +31,7 @@ extern print_register_changes
 %define PTRACE_EVENT_EXIT  6
 %define EXEC_EVENTS        (-648)        ; outside previous register snapshot
 %define EXIT_EVENTS        (-652)
+%define CLEANUP_STOPS      (-656)        ; bounded reap loop state
 %define SIGKILL            9
 %define SIGTRAP            5
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
@@ -66,6 +67,8 @@ section .rodata
     err_step:      db 'ptrace(SINGLESTEP)', 0
     err_cont:      db 'ptrace(CONT)', 0
     err_stop:      db 'Error: child did not enter expected ptrace stop.', 0
+    err_group_stop: db 'Error: job-control group stop is unsupported by this tracer.', 0
+    err_reap:      db 'Error: cleanup exhausted ptrace stop budget.', 0
 
 section .text
 ; debug_run(argv, step_limit, changes_only) => target status; 1 on tracing error.
@@ -202,6 +205,19 @@ debug_run:
     shr eax, 8
     and eax, 0xff
     mov [rbp-36], eax
+    jmp .classify_signal_stop
+; Unlike a signal-delivery stop, Linux job-control group stops do not
+; carry a siginfo record: PTRACE_GETSIGINFO fails with EINVAL. Forwarding
+; SIGSTOP again on group-stop can loop forever; fail closed and reap.
+.classify_signal_stop:
+    call .get_siginfo
+    cmp rax, -1
+    jne .valid_signal_stop
+    call __errno_location
+    cmp dword [rax], 22             ; EINVAL => group stop
+    je .group_stop
+    jmp .siginfo_failed
+.valid_signal_stop:
     call .report_signal_stop
 .resume:
     mov edi, PTRACE_CONT
@@ -253,10 +269,9 @@ debug_run:
     shr eax, 8
     and eax, 0xff
     mov [rbp-36], eax
-    call .report_signal_stop
-    ; After the single-step trap, later signals belong to the target.
-    ; In particular, do not swallow application-generated SIGTRAP.
-    jmp .resume
+    ; After the single-step trap, ordinary signals belong to the target.
+    ; Reject group stops instead of reinjecting SIGSTOP indefinitely.
+    jmp .classify_signal_stop
 
 ; PTRACE_O_TRACEEXEC / PTRACE_O_TRACEEXIT produce synthetic SIGTRAP
 ; wait stops, not application signals. Resume with signal zero.
@@ -449,13 +464,50 @@ debug_run:
     lea rdi, [rel err_stop]
     call puts
     jmp .cleanup
+.group_stop:
+    lea rdi, [rel err_group_stop]
+    call puts
+    jmp .cleanup
 .cleanup_errno:
     call perror
 .cleanup:
+    ; A SIGKILL is not necessarily followed by a terminal waitpid result:
+    ; PTRACE_O_TRACEEXIT can first report a synthetic EXIT stop. Drain
+    ; stopped states with PTRACE_CONT(signal=0), then wait until the child
+    ; has been reaped. Limit the stop loop to avoid infinite cleanup cycles.
     mov edi, [rbp-16]
     mov esi, SIGKILL
     call kill
-    call .wait_child             ; reap tracee after forced termination
+    mov dword [rbp+CLEANUP_STOPS], 0
+.cleanup_wait:
+    call .wait_child
+    cmp rax, -1
+    je .cleanup_done            ; already reaped/ECHILD or wait error
+    mov eax, [rbp+STATUS]
+    mov ecx, eax
+    and ecx, 0x7f
+    je .cleanup_done            ; WIFEXITED
+    cmp ecx, 0x7f
+    jne .cleanup_done           ; WIFSIGNALED
+    inc dword [rbp+CLEANUP_STOPS]
+    cmp dword [rbp+CLEANUP_STOPS], 32
+    jae .cleanup_exhausted
+    mov edi, PTRACE_CONT
+    mov rsi, [rbp-16]
+    xor edx, edx
+    xor ecx, ecx
+    xor eax, eax
+    call ptrace
+    cmp rax, -1
+    je .cleanup_wait            ; possibly died between stop and continue
+    jmp .cleanup_wait
+.cleanup_exhausted:
+    lea rdi, [rel err_reap]
+    call puts
+    mov edi, [rbp-16]
+    mov esi, SIGKILL
+    call kill                   ; bounded best-effort fallback
+.cleanup_done:
     mov eax, 1
 .done:
     leave
