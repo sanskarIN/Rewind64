@@ -1,5 +1,14 @@
 # Rewind64 development progress
 
+## v0.2.12 repeatable stop-on-signal — 2026-10-20 (development)
+
+- Development branch `dev/v0.2.12-until-signal`; [PR #22](https://github.com/sanskarIN/Rewind64/pull/22). Experimental release pending final validation.
+- Added NASM interactive `until-signal` / `u` to resume toward the **next verified application signal-delivery stop**, return to the prompt with the new signal pending and allow inspection of the accumulated `signals` / `events` state. A previously pending signal is forwarded once only on successful resume.
+- Added native assembly `signal_burst` fixture that repeatedly sends and handles **ten** SIGUSR1 events, verifying exactly ten stops, eight retained history entries and correct observed-vs-forwarded counts. Tests also exercise two handled signals, fault stops, lifecycle event transitions, EOF, malformed commands and compact mode.
+- **204/204 native NASM/Bash tests passed** on Ubuntu 22.04 and Ubuntu 24.04 on the implementation head. Final PR-head CI and guarded native binary/checksum release publication remain required.
+- No Python is used; release remains experimental single-process Linux x86-64, forward-only, with no replay or historic CPU/memory state reconstruction.
+
+
 ## v0.2.11 classified signal-stop history — 2026-10-20 (experimental prerelease published)
 
 - **Published:** [v0.2.11 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.11). The implementation merged through [PR #21](https://github.com/sanskarIN/Rewind64/pull/21) with 11 focused development commits using `sanskarin@outlook.in`.
