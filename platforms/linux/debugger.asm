@@ -75,7 +75,8 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step | regs | status | code | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step [1..16] | regs | status | code | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_step_usage: db 'Usage: step [1..16] or s [1..16] (strict decimal count; default 1)', 0
     msg_memory_word: db 'Memory word at 0x%016lx: 0x%016lx', 10, 0
     msg_memory_usage: db 'Usage: mem 0xHEX [1..4] or m 0xHEX [1..4] (1..16 hex digits; 8 bytes per word)', 0
     err_memory_wrap: db 'Error: memory range wraps the 64-bit address space.', 0
@@ -339,6 +340,64 @@ debug_run:
     call strcmp
     test eax, eax
     jz .session_step
+    ; Distinguish 'step N' and 's N' from the exact single-step forms,
+    ; with no prefix confusion for 'stack', 'status' or other commands.
+    lea rsi, [rbp+SESSION_BUFFER]
+    cmp byte [rsi], 's'
+    jne .session_not_counted_step
+    cmp byte [rsi+1], ' '
+    je .session_short_count
+    cmp byte [rsi+1], 't'
+    jne .session_not_counted_step
+    cmp byte [rsi+2], 'e'
+    jne .session_not_counted_step
+    cmp byte [rsi+3], 'p'
+    jne .session_not_counted_step
+    cmp byte [rsi+4], ' '
+    jne .session_not_counted_step
+    add rsi, 5
+    jmp .session_parse_count
+.session_short_count:
+    add rsi, 2
+.session_parse_count:
+    ; 1..16 without signs, leading zeros, whitespace or extra arguments.
+    ; Accept final newline or EOF after exactly one/two decimal digits.
+    movzx edx, byte [rsi]
+    cmp dl, '1'
+    jb .session_step_usage
+    cmp dl, '9'
+    ja .session_step_usage
+    sub edx, '0'
+    mov ecx, edx
+    inc rsi
+    movzx edx, byte [rsi]
+    cmp dl, 10
+    je .session_count_valid
+    test dl, dl
+    jz .session_count_valid
+    cmp dl, '0'
+    jb .session_step_usage
+    cmp dl, '9'
+    ja .session_step_usage
+    imul ecx, ecx, 10
+    sub edx, '0'
+    add ecx, edx
+    inc rsi
+    cmp byte [rsi], 10
+    je .session_count_valid
+    cmp byte [rsi], 0
+    jne .session_step_usage
+.session_count_valid:
+    cmp ecx, SESSION_MAX_STEPS
+    ja .session_step_usage
+    mov dword [rbp+SESSION_REMAINING], ecx
+    mov dword [rbp+SESSION_STEPPING], 1
+    jmp .step_loop
+.session_step_usage:
+    lea rdi, [rel msg_step_usage]
+    call puts
+    jmp .session_prompt
+.session_not_counted_step:
     lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_regs]
     call strcmp
