@@ -1035,6 +1035,93 @@ signal_history_forward() {
   assert_contains signal_history_forward 'Signals forwarded: 1' &&
   assert_contains signal_history_forward 'Target terminated by signal 4'
 }
+# v0.2.12: resume to the next genuine signal without consuming it.
+until_handled_twice() {
+  assert_contains until_handled_twice 'Target exited with status 0' &&
+  assert_count until_handled_twice 'Interactive signal stop: signal 10 pending' 2 &&
+  assert_count until_handled_twice 'Signal history [' 3 &&
+  assert_contains until_handled_twice 'Signal history [1]: signal=10 si_code=0 step=0' &&
+  assert_contains until_handled_twice 'observed_signals=1 forwarded_signals=0 pending_signal=10' &&
+  assert_contains until_handled_twice 'observed_signals=2 forwarded_signals=1 pending_signal=10' &&
+  assert_contains until_handled_twice 'Signals forwarded: 2'
+}
+until_burst_ring() {
+  assert_contains until_burst_ring 'Target exited with status 0' &&
+  assert_count until_burst_ring 'Interactive signal stop: signal 10 pending' 10 &&
+  assert_count until_burst_ring 'Signal history [' 8 &&
+  assert_contains until_burst_ring 'Signal history [0]: signal=10 si_code=0 step=0' &&
+  assert_contains until_burst_ring 'Signal history [7]: signal=10 si_code=0 step=0' &&
+  assert_contains until_burst_ring 'observed_signals=10 forwarded_signals=9 pending_signal=10' &&
+  assert_contains until_burst_ring 'Signals forwarded: 10'
+}
+until_burst_repeat_read() {
+  assert_contains until_burst_repeat_read 'Target exited with status 0' &&
+  assert_count until_burst_repeat_read 'Signal history [' 16 &&
+  assert_count until_burst_repeat_read 'Signal history [0]: signal=10 si_code=0 step=0' 2 &&
+  assert_count until_burst_repeat_read 'Signal history [7]: signal=10 si_code=0 step=0' 2 &&
+  assert_contains until_burst_repeat_read 'Signals forwarded: 10'
+}
+until_fault_pending() {
+  assert_contains until_fault_pending 'Interactive signal stop: signal 4 pending' &&
+  assert_contains until_fault_pending 'steps=0 pending_signal=4' &&
+  assert_contains until_fault_pending 'Signal history [0]: signal=4 si_code=' &&
+  assert_contains until_fault_pending 'Signals forwarded: 0' &&
+  assert_not_running until_fault_pending
+}
+until_fault_forward() {
+  assert_contains until_fault_forward 'Interactive signal stop: signal 4 pending' &&
+  assert_contains until_fault_forward 'Target terminated by signal 4' &&
+  assert_contains until_fault_forward 'Signals forwarded: 1'
+}
+until_terminates() {
+  assert_contains until_terminates 'Target exited with status 7' &&
+  assert_count until_terminates 'Interactive signal stop:' 0 &&
+  assert_contains until_terminates 'Signals forwarded: 0'
+}
+until_reexec() {
+  assert_contains until_reexec 'Ptrace exec event:' &&
+  assert_contains until_reexec 'Target exited with status 42' &&
+  assert_contains until_reexec 'Ptrace events: exec=1 exit=1' &&
+  assert_count until_reexec 'Interactive signal stop:' 0
+}
+until_invalid() {
+  assert_count until_invalid 'Unknown session command. Type help.' 5 &&
+  assert_contains until_invalid 'steps=0 pending_signal=0' &&
+  assert_count until_invalid 'Interactive signal stop:' 0 &&
+  assert_not_running until_invalid
+}
+until_eof() {
+  assert_contains until_eof 'Target exited with status 7' &&
+  assert_contains until_eof 'Signals forwarded: 0'
+}
+until_alias_eof() {
+  assert_contains until_alias_eof 'Target exited with status 7' &&
+  assert_contains until_alias_eof 'Signals forwarded: 0'
+}
+until_compact() {
+  assert_count until_compact '    GPR:' 0 &&
+  assert_contains until_compact 'observed_signals=1 forwarded_signals=0 pending_signal=4' &&
+  assert_contains until_compact 'Signal history [0]: signal=4 si_code=' &&
+  assert_not_running until_compact
+}
+until_inspect_pending() {
+  assert_contains until_inspect_pending 'Interactive signal stop: signal 4 pending' &&
+  assert_contains until_inspect_pending 'observed_signals=1 forwarded_signals=0 pending_signal=4' &&
+  assert_count until_inspect_pending 'Signal history [' 1 &&
+  assert_count until_inspect_pending 'RIP history [' 1 &&
+  assert_contains until_inspect_pending 'steps=0 pending_signal=4' &&
+  assert_not_running until_inspect_pending
+}
+until_step_pending() {
+  assert_contains until_step_pending 'Interactive signal stop: signal 4 pending' &&
+  assert_contains until_step_pending 'Signals forwarded: 1' &&
+  assert_contains until_step_pending 'Target terminated by signal 4'
+}
+until_continue_pending() {
+  assert_contains until_continue_pending 'Interactive signal stop: signal 4 pending' &&
+  assert_contains until_continue_pending 'Signals forwarded: 1' &&
+  assert_contains until_continue_pending 'Target terminated by signal 4'
+}
 session_code() {
   assert_contains session_code 'Code word at RIP=0x' &&
   assert_contains session_code 'Target exited with status 42' &&
@@ -1202,6 +1289,26 @@ printf 'step\nsignals\ncontinue\n' > "$tmp/signal-history-forward"
 
 
 # assuming fixed link addresses; no Python or hardcoded ASLR assumptions.
+# v0.2.12 native repeat-signal and session transition command scripts.
+printf 'until-signal\nsignals\nevents\nu\nsignals\nevents\nu\n' > "$tmp/until-handled-twice"
+: > "$tmp/until-burst-ring"
+for ((n=0;n<10;n++)); do printf 'u\n' >> "$tmp/until-burst-ring"; done
+printf 'signals\nevents\nu\n' >> "$tmp/until-burst-ring"
+: > "$tmp/until-burst-repeat"
+for ((n=0;n<10;n++)); do printf 'until-signal\n' >> "$tmp/until-burst-repeat"; done
+printf 'signals\ng\nu\n' >> "$tmp/until-burst-repeat"
+printf 'until-signal\nsignals\nstatus\nquit\n' > "$tmp/until-fault-pending"
+printf 'u\nu\n' > "$tmp/until-fault-forward"
+printf 'u\n' > "$tmp/until-terminates"
+printf 'until-signal\n' > "$tmp/until-reexec"
+printf 'until-signal 1\nu 1\nUNTIL-SIGNAL\nU\nuntil-signal?\nstatus\nquit\n' > "$tmp/until-invalid"
+printf 'until-signal' > "$tmp/until-eof"
+printf 'u' > "$tmp/until-alias-eof"
+printf 'u\nsignals\nevents\nquit\n' > "$tmp/until-compact"
+printf 'u\nevents\nsignals\nhistory 1\nstatus\nquit\n' > "$tmp/until-inspect-pending"
+printf 'u\nstep\n' > "$tmp/until-step-pending"
+printf 'u\ncontinue\n' > "$tmp/until-continue-pending"
+
 # Resolve addresses from symbols in the native ELF fixtures.
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
 illegal_entry="$(nm -n "$ROOT/build/illegal" | awk '$3 == "_start" {print $1; exit}')"
@@ -1347,6 +1454,20 @@ check signal_history_unknown 0 session_exec "$tmp/signal-history-unknown" "$BIN"
 check signal_history_eof 0 session_exec "$tmp/signal-history-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check signal_history_alias_eof 0 session_exec "$tmp/signal-history-alias-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check signal_history_forward 132 session_exec "$tmp/signal-history-forward" "$BIN" run --interactive "$ROOT/build/illegal"
+check until_handled_twice 0 session_exec "$tmp/until-handled-twice" "$BIN" run --interactive "$ROOT/build/handled_signal"
+check until_burst_ring 0 session_exec "$tmp/until-burst-ring" "$BIN" run --interactive "$ROOT/build/signal_burst"
+check until_burst_repeat_read 0 session_exec "$tmp/until-burst-repeat" "$BIN" run --interactive "$ROOT/build/signal_burst"
+check until_fault_pending 0 session_exec "$tmp/until-fault-pending" "$BIN" run --interactive "$ROOT/build/illegal"
+check until_fault_forward 132 session_exec "$tmp/until-fault-forward" "$BIN" run --interactive "$ROOT/build/illegal"
+check until_terminates 7 session_exec "$tmp/until-terminates" "$BIN" run --interactive "$ROOT/build/exit7"
+check until_reexec 42 session_exec "$tmp/until-reexec" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_invalid 0 session_exec "$tmp/until-invalid" "$BIN" run --interactive "$ROOT/build/long_steps"
+check until_eof 7 session_exec "$tmp/until-eof" "$BIN" run --interactive "$ROOT/build/exit7"
+check until_alias_eof 7 session_exec "$tmp/until-alias-eof" "$BIN" run --interactive "$ROOT/build/exit7"
+check until_compact 0 session_exec "$tmp/until-compact" "$BIN" run --interactive --changes-only "$ROOT/build/illegal"
+check until_inspect_pending 0 session_exec "$tmp/until-inspect-pending" "$BIN" run --interactive "$ROOT/build/illegal"
+check until_step_pending 132 session_exec "$tmp/until-step-pending" "$BIN" run --interactive "$ROOT/build/illegal"
+check until_continue_pending 132 session_exec "$tmp/until-continue-pending" "$BIN" run --interactive "$ROOT/build/illegal"
 check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"
