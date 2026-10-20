@@ -52,6 +52,9 @@ extern stdout
 %define MEMORY_ADDRESS     (-736)        ; one address read from strict hex
 %define MEMORY_DIGITS      (-740)        ; parsed digit count, max 16
 %define MEMORY_WORD        (-752)        ; qword from PTRACE_PEEKDATA
+%define MEMORY_LIMIT       (-756)        ; bounded requested words, 1..4
+%define MEMORY_INDEX       (-760)        ; zero-based current word index
+%define MEMORY_CURRENT     (-768)        ; computed address checked for wrap
 %define SESSION_BUFFER     (-832)        ; 64-byte input buffer, -832..-769
 %define SESSION_BUF_SIZE    64
 %define SIGKILL            9
@@ -68,9 +71,10 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step | regs | status | code | stack | mem 0xHEX | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step | regs | status | code | stack | mem 0xHEX [1..4] | continue | help | quit', 0
     msg_memory_word: db 'Memory word at 0x%016lx: 0x%016lx', 10, 0
-    msg_memory_usage: db 'Usage: mem 0xHEX or m 0xHEX (1..16 digits; reads 8 bytes)', 0
+    msg_memory_usage: db 'Usage: mem 0xHEX [1..4] or m 0xHEX [1..4] (1..16 hex digits; 8 bytes per word)', 0
+    err_memory_wrap: db 'Error: memory range wraps the 64-bit address space.', 0
     msg_stack_word: db 'Stack word [%u] at 0x%016lx: 0x%016lx', 10, 0
     msg_code_word: db 'Code word at RIP=0x%016lx: 0x%016lx', 10, 0
     msg_session_status: db 'Session status: pid=%ld steps=%u pending_signal=%u', 10, 0
@@ -345,7 +349,7 @@ debug_run:
     test eax, eax
     jz .session_stack
     ; Only accept 'mem 0x...' or 'm 0x...'. The address parser below
-    ; validates every hexadecimal digit and the entire trailing line.
+    ; validates every hexadecimal digit and optional bounded word count.
     lea rsi, [rbp+SESSION_BUFFER]
     cmp byte [rsi], 'm'
     jne .session_not_memory
@@ -496,6 +500,7 @@ debug_run:
     jne .session_memory_usage
 .memory_prefix_ok:
     add rsi, 2
+    mov dword [rbp+MEMORY_LIMIT], 1 ; single-word behavior remains default
     xor rdx, rdx                ; 64-bit address accumulator
     xor ecx, ecx                ; number of valid hex digits
 .memory_digit:
@@ -504,6 +509,8 @@ debug_run:
     jz .memory_end
     cmp r8b, 10
     je .memory_end
+    cmp r8b, ' '
+    je .memory_optional_count
     cmp r8b, '0'
     jb .session_memory_usage
     cmp r8b, '9'
@@ -531,15 +538,42 @@ debug_run:
     inc ecx
     inc rsi
     jmp .memory_digit
+.memory_optional_count:
+    ; Exactly one separating space, then one decimal digit 1..4.
+    ; No trailing spaces or extra arguments are permitted.
+    test ecx, ecx
+    jz .session_memory_usage
+    inc rsi
+    movzx eax, byte [rsi]
+    cmp al, '1'
+    jb .session_memory_usage
+    cmp al, '4'
+    ja .session_memory_usage
+    sub eax, '0'
+    mov [rbp+MEMORY_LIMIT], eax
+    inc rsi
+    cmp byte [rsi], 10
+    je .memory_end
+    cmp byte [rsi], 0
+    jne .session_memory_usage
 .memory_end:
     test ecx, ecx
     jz .session_memory_usage
     mov [rbp+MEMORY_ADDRESS], rdx
+    mov dword [rbp+MEMORY_INDEX], 0
+.memory_next:
+    ; An overflowing address must never wrap to low tracee memory.
+    mov eax, [rbp+MEMORY_INDEX]
+    lea r8, [rax*8]
+    mov rdx, [rbp+MEMORY_ADDRESS]
+    add rdx, r8
+    jc .memory_wrap
+    mov [rbp+MEMORY_CURRENT], rdx
     call __errno_location
     mov dword [rax], 0
     mov edi, PTRACE_PEEKDATA
     mov rsi, [rbp-16]
-    mov rdx, [rbp+MEMORY_ADDRESS]
+    mov rdx, [rbp+MEMORY_CURRENT]
     xor ecx, ecx
     xor eax, eax
     call ptrace
@@ -551,10 +585,18 @@ debug_run:
     jne .memory_read_failed
 .memory_print:
     lea rdi, [rel msg_memory_word]
-    mov rsi, [rbp+MEMORY_ADDRESS]
+    mov rsi, [rbp+MEMORY_CURRENT]
     mov rdx, [rbp+MEMORY_WORD]
     xor eax, eax
     call printf
+    inc dword [rbp+MEMORY_INDEX]
+    mov eax, [rbp+MEMORY_INDEX]
+    cmp eax, [rbp+MEMORY_LIMIT]
+    jl .memory_next
+    jmp .session_prompt
+.memory_wrap:
+    lea rdi, [rel err_memory_wrap]
+    call puts
     jmp .session_prompt
 .memory_read_failed:
     lea rdi, [rel err_memory_read]
