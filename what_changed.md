@@ -1,13 +1,13 @@
 # Rewind64 development progress
 
-## v0.2.6 interactive bounded step batches — 2026-10-20 (development)
+## v0.2.6 interactive bounded step batches — 2026-10-20 (experimental prerelease published)
 
-- Feature branch: `dev/v0.2.6-interactive-batched-steps`, [pull request #16](https://github.com/sanskarIN/Rewind64/pull/16).
+- **Published:** [v0.2.6 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.6). The implementation was merged through [PR #16](https://github.com/sanskarIN/Rewind64/pull/16), with 11 focused development commits using `sanskarin@outlook.in`.
 - Native NASM interactive debugger accepts `step N` and `s N` (1–16 decimal), while bare `step` / `s` retain one-step behavior. Malformed counts are rejected while the tracee stays stopped.
 - A new local `SESSION_REMAINING` slot counts verified synthetic step completions. CPU state is inspected and delta-printed after **each** completion, not only at the end of a batch. Cumulative diagnostic counts remain unchanged.
 - Batch requests return to the prompt when the count reaches zero. Real signal-delivery stops immediately cancel the remainder and preserve pending signal decisions; synthetic exec/exit ptrace events cancel the batch before automatic continuation.
 - Added 14 Bash integration cases using native NASM fixtures for exact/aliased/mixed count requests, malformed input, pending SIGILL/SIGSEGV/SIGTRAP, forwarding, concise CPU deltas, code inspection, early program exit and EOF.
-- Initial validation on PR head: **131/131 passed on Ubuntu 22.04 and Ubuntu 24.04**. Final release status must be verified independently before marking the milestone published.
+- **131/131 checks passed** on both Ubuntu 22.04 and Ubuntu 24.04, on the final PR head and merged main: https://github.com/sanskarIN/Rewind64/actions/runs/39363424631 . The gated [pre-release workflow](https://github.com/sanskarIN/Rewind64/actions/runs/39363424542) succeeded and uploaded the Linux x86-64 executable archive plus SHA-256 checksum.
 - Remains Linux x86-64 only, Python-free and single-tracee. No process attachment, source-level debugger, trace recording, replay or reverse stepping is implemented.
 
 
