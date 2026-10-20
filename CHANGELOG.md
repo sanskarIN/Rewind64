@@ -1,12 +1,12 @@
 # Changelog
 
-## v0.2.11 — 2026-10-20 (experimental Linux x86-64 development)
+## v0.2.11 — 2026-10-20 (experimental Linux x86-64 prerelease)
 
 - Added interactive native NASM `signals` / `g` to inspect **up to eight most recent validated application signal-delivery stops** in chronological order, each labeled with its signal number, signed `siginfo_t.si_code` and cumulative confirmed step number.
 - Uses a dedicated eight-entry fixed-size in-memory circular buffer (eight 16-byte records), with disjoint index/count state and a 1344-byte ABI-aligned debugger stack frame. Oldest records are overwritten when the ring fills; no heap growth or file recording.
 - Records only successful `PTRACE_GETSIGINFO`-classified signal-delivery stops, not synthetic single-step traps, ptrace events, ordinary inspection commands or invalid input. Inspection never resumes the tracee or forwards pending signals.
 - Supports `signals`/`g` at EOF without a final newline. Empty history emits a clear diagnostic; malformed arguments cannot turn into tracee resume commands.
-- Added 13 Python-free Bash/native NASM regression cases, raising the suite to **190** scenarios. Initial CI found an insertion-related Bash test syntax error, which was corrected without weakening tests. The corrected feature head passed **190/190 on Ubuntu 22.04 and 24.04**.
+- Added 13 Python-free Bash/native NASM regression cases, raising the suite to **190/190 passing on both Ubuntu 22.04 and 24.04**. Initial CI found an insertion-related Bash test syntax error, which was corrected without weakening tests. The release workflow built and published the Linux x86-64 executable archive with its SHA-256 checksum.
 - Experimental single-launched-tracee Linux x86-64 debugger, Boost Software License 1.0. No process attachment, full trace recording, deterministic replay or true reverse execution is provided.
 
 
