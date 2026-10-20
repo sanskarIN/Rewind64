@@ -65,7 +65,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.9-pre'; }
+version() { assert_contains version 'v0.2.10-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -879,6 +879,83 @@ history_tail_wrap() {
   assert_contains history_tail_wrap "RIP history [15]: 0x${history_thirtythree} step=33" &&
   assert_not_running history_tail_wrap
 }
+# v0.2.10: distinguish observed signal-delivery stops from forwarded ones.
+events_initial() {
+  assert_count events_initial 'Lifecycle: pid=' 1 &&
+  assert_contains events_initial 'steps=0 observed_signals=0 forwarded_signals=0 pending_signal=0 exec_events=0 exit_events=0' &&
+  assert_count events_initial 'Last signal stop:' 0 &&
+  assert_not_running events_initial
+}
+events_alias() {
+  assert_count events_alias 'Lifecycle: pid=' 1 &&
+  assert_contains events_alias 'steps=0 observed_signals=0 forwarded_signals=0 pending_signal=0 exec_events=0 exit_events=0' &&
+  assert_not_running events_alias
+}
+events_repeat() {
+  assert_count events_repeat 'Lifecycle: pid=' 3 &&
+  assert_count events_repeat 'steps=0 observed_signals=0 forwarded_signals=0 pending_signal=0 exec_events=0 exit_events=0' 3 &&
+  assert_count events_repeat 'Last signal stop:' 0 &&
+  assert_not_running events_repeat
+}
+events_steps() {
+  assert_contains events_steps 'steps=3 observed_signals=0 forwarded_signals=0 pending_signal=0 exec_events=0 exit_events=0' &&
+  assert_count events_steps 'After step:' 3 &&
+  assert_not_running events_steps
+}
+events_inspection() {
+  assert_contains events_inspection 'steps=0 observed_signals=0 forwarded_signals=0 pending_signal=0 exec_events=0 exit_events=0' &&
+  assert_count events_inspection 'Code word at RIP=' 1 &&
+  assert_count events_inspection 'Instruction byte [' 2 &&
+  assert_count events_inspection 'RIP history [' 1 &&
+  assert_not_running events_inspection
+}
+events_invalid() {
+  assert_count events_invalid 'Unknown session command. Type help.' 4 &&
+  assert_count events_invalid 'Lifecycle: pid=' 0 &&
+  assert_contains events_invalid 'steps=0 pending_signal=0' &&
+  assert_not_running events_invalid
+}
+events_sigill() {
+  assert_contains events_sigill 'Interactive signal stop: signal 4 pending' &&
+  assert_contains events_sigill 'steps=0 observed_signals=1 forwarded_signals=0 pending_signal=4 exec_events=0 exit_events=0' &&
+  assert_contains events_sigill 'Last signal stop: signal=4 si_code=' &&
+  assert_contains events_sigill 'Signals forwarded: 0' &&
+  assert_not_running events_sigill
+}
+events_sigsegv() {
+  assert_contains events_sigsegv 'Interactive signal stop: signal 11 pending' &&
+  assert_contains events_sigsegv 'steps=1 observed_signals=1 forwarded_signals=0 pending_signal=11 exec_events=0 exit_events=0' &&
+  assert_contains events_sigsegv 'Last signal stop: signal=11 si_code=' &&
+  assert_not_running events_sigsegv
+}
+events_sigtrap() {
+  assert_contains events_sigtrap 'Interactive signal stop: signal 5 pending' &&
+  assert_contains events_sigtrap 'steps=1 observed_signals=1 forwarded_signals=0 pending_signal=5 exec_events=0 exit_events=0' &&
+  assert_contains events_sigtrap 'Last signal stop: signal=5 si_code=' &&
+  assert_not_running events_sigtrap
+}
+events_batch_signal() {
+  assert_contains events_batch_signal 'steps=0 observed_signals=1 forwarded_signals=0 pending_signal=4 exec_events=0 exit_events=0' &&
+  assert_count events_batch_signal 'Last signal stop:' 1 &&
+  assert_contains events_batch_signal 'Signals forwarded: 0' &&
+  assert_not_running events_batch_signal
+}
+events_compact() {
+  assert_count events_compact 'Lifecycle: pid=' 1 &&
+  assert_contains events_compact 'steps=4 observed_signals=0 forwarded_signals=0 pending_signal=0 exec_events=0 exit_events=0' &&
+  assert_count events_compact '    GPR:' 0 &&
+  assert_not_running events_compact
+}
+events_alias_eof() {
+  assert_contains events_alias_eof 'steps=0 observed_signals=0 forwarded_signals=0 pending_signal=0 exec_events=0 exit_events=0' &&
+  assert_contains events_alias_eof 'Interactive session ended;' &&
+  assert_not_running events_alias_eof
+}
+events_eof() {
+  assert_contains events_eof 'steps=0 observed_signals=0 forwarded_signals=0 pending_signal=0 exec_events=0 exit_events=0' &&
+  assert_contains events_eof 'Interactive session ended;' &&
+  assert_not_running events_eof
+}
 session_code() {
   assert_contains session_code 'Code word at RIP=0x' &&
   assert_contains session_code 'Target exited with status 42' &&
@@ -1014,6 +1091,21 @@ printf 'step 5\nhistory 2\nh 2\nquit\n' > "$tmp/history-tail-repeat"
 printf 's 2\nhistory 1' > "$tmp/history-tail-eof"
 printf 'step 16\nstep 16\ns 1\nhistory 16\nq\n' > "$tmp/history-tail-wrap"
 
+# v0.2.10 read-only lifecycle counters at interactive stops.
+printf 'events\nstatus\nquit\n' > "$tmp/events-initial"
+printf 'e\nquit\n' > "$tmp/events-alias"
+printf 'events\ne\nevents\nq\n' > "$tmp/events-repeat"
+printf 'step 3\ne\nq\n' > "$tmp/events-steps"
+printf 'code\nbytes 2\nhistory 1\nevents\nquit\n' > "$tmp/events-inspection"
+printf 'events 1\ne 1\nEVENTS\neventsx\nstatus\nq\n' > "$tmp/events-invalid"
+printf 'step\nevents\nstatus\nquit\n' > "$tmp/events-sigill"
+printf 'step\nstep\ne\nq\n' > "$tmp/events-sigsegv"
+printf 'step\nstep\nevents\nquit\n' > "$tmp/events-sigtrap"
+printf 'step 16\nevents\nquit\n' > "$tmp/events-batch-signal"
+printf 'step 4\ne\nquit\n' > "$tmp/events-compact"
+printf 'events' > "$tmp/events-eof"
+
+printf 'e' > "$tmp/events-alias-eof"
 # Resolve addresses from symbols in the native ELF fixtures rather than
 # assuming fixed link addresses; no Python or hardcoded ASLR assumptions.
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
@@ -1134,6 +1226,19 @@ check history_tail_inspection 0 session_exec "$tmp/history-tail-inspection" "$BI
 check history_tail_repeat 0 session_exec "$tmp/history-tail-repeat" "$BIN" run --interactive "$ROOT/build/long_steps"
 check history_tail_eof 0 session_exec "$tmp/history-tail-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check history_tail_wrap 0 session_exec "$tmp/history-tail-wrap" "$BIN" run --interactive "$ROOT/build/long_steps"
+check events_initial 0 session_exec "$tmp/events-initial" "$BIN" run --interactive "$ROOT/build/long_steps"
+check events_alias 0 session_exec "$tmp/events-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
+check events_repeat 0 session_exec "$tmp/events-repeat" "$BIN" run --interactive "$ROOT/build/long_steps"
+check events_steps 0 session_exec "$tmp/events-steps" "$BIN" run --interactive "$ROOT/build/long_steps"
+check events_inspection 0 session_exec "$tmp/events-inspection" "$BIN" run --interactive "$ROOT/build/long_steps"
+check events_invalid 0 session_exec "$tmp/events-invalid" "$BIN" run --interactive "$ROOT/build/long_steps"
+check events_sigill 0 session_exec "$tmp/events-sigill" "$BIN" run --interactive "$ROOT/build/illegal"
+check events_sigsegv 0 session_exec "$tmp/events-sigsegv" "$BIN" run --interactive "$ROOT/build/segv"
+check events_sigtrap 0 session_exec "$tmp/events-sigtrap" "$BIN" run --interactive "$ROOT/build/trap"
+check events_batch_signal 0 session_exec "$tmp/events-batch-signal" "$BIN" run --interactive "$ROOT/build/illegal"
+check events_compact 0 session_exec "$tmp/events-compact" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
+check events_eof 0 session_exec "$tmp/events-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
+check events_alias_eof 0 session_exec "$tmp/events-alias-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"
