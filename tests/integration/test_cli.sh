@@ -65,7 +65,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.4-pre'; }
+version() { assert_contains version 'v0.2.5-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -485,6 +485,55 @@ memory_combo() {
   assert_count memory_combo 'Stack word [' 4 &&
   assert_not_running memory_combo
 }
+memory_range_four() {
+  assert_count memory_range_four 'Memory word at 0x' 4 &&
+  assert_contains memory_range_four ': 0x1122334455667788' &&
+  assert_contains memory_range_four ': 0xffffffffffffffff' &&
+  assert_contains memory_range_four ': 0x0000000000000000' &&
+  assert_contains memory_range_four ': 0x8899aabbccddeeff' &&
+  assert_contains memory_range_four 'Interactive steps completed: 0' &&
+  assert_not_running memory_range_four
+}
+memory_range_two() {
+  assert_count memory_range_two 'Memory word at 0x' 2 &&
+  assert_contains memory_range_two ': 0xffffffffffffffff' &&
+  assert_contains memory_range_two ': 0x0000000000000000' &&
+  assert_not_running memory_range_two
+}
+memory_range_one() {
+  assert_count memory_range_one 'Memory word at 0x' 1 &&
+  assert_contains memory_range_one ': 0x1122334455667788' &&
+  assert_not_running memory_range_one
+}
+memory_range_invalid_count() {
+  assert_count memory_range_invalid_count 'Usage: mem 0xHEX' 9 &&
+  assert_count memory_range_invalid_count 'Memory word at 0x' 0 &&
+  assert_contains memory_range_invalid_count 'steps=0 pending_signal=0' &&
+  assert_not_running memory_range_invalid_count
+}
+memory_range_wrap() {
+  assert_contains memory_range_wrap 'Error: memory range wraps the 64-bit address space.' &&
+  assert_count memory_range_wrap 'Memory word at 0x' 0 &&
+  assert_count memory_range_wrap 'ptrace(PEEKDATA at address)' 0 &&
+  assert_not_running memory_range_wrap
+}
+session_overlong() {
+  assert_count session_overlong 'Error: session command too long' 1 &&
+  assert_count session_overlong 'Target exited with status' 0 &&
+  assert_contains session_overlong 'steps=0 pending_signal=0' &&
+  assert_contains session_overlong 'Interactive session ended;' &&
+  assert_not_running session_overlong
+}
+session_overlong_eof() {
+  assert_count session_overlong_eof 'Error: session command too long' 1 &&
+  assert_contains session_overlong_eof 'Interactive session ended;' &&
+  assert_not_running session_overlong_eof
+}
+session_max_line() {
+  assert_count session_max_line 'Error: session command too long' 0 &&
+  assert_count session_max_line 'Unknown session command. Type help.' 1 &&
+  assert_not_running session_max_line
+}
 session_stack_initial() {
   assert_count session_stack_initial 'Stack word [' 4 &&
   assert_contains session_stack_initial 'Stack word [0] at ' &&
@@ -632,6 +681,20 @@ printf 'step\nmem 0x%s\nstatus\nquit\n' "$illegal_entry" > "$tmp/memory-signal"
 printf 'mem 0x%s\ncontinue\n' "$memory_base" > "$tmp/memory-compact"
 printf 'code\nmem 0x%s\nstack\nquit\n' "$memory_base" > "$tmp/memory-combo"
 
+# v0.2.5: bounded read-only word ranges and strict count syntax.
+printf 'mem 0x%s 4\nquit\n' "$memory_base" > "$tmp/memory-range-four"
+printf 'm 0x%s 2\nquit\n' "$memory_second" > "$tmp/memory-range-two"
+printf 'mem 0x%s 1\nquit\n' "$memory_base" > "$tmp/memory-range-one"
+printf 'mem 0x%s 0\nmem 0x%s 5\nmem 0x%s 10\nmem 0x%s -1\nmem 0x%s a\nmem 0x%s 1 \nmem 0x%s  2\nmem 0x%s 2x\nm 0x%s 4 \nstatus\nquit\n' \
+  "$memory_base" "$memory_base" "$memory_base" "$memory_base" "$memory_base" \
+  "$memory_base" "$memory_base" "$memory_base" "$memory_base" > "$tmp/memory-range-invalid-count"
+printf 'mem 0xfffffffffffffff8 2\nquit\n' > "$tmp/memory-range-wrap"
+# A long line ending in 'continue' must not resume the traced program.
+# 62 bytes plus newline is exactly the longest accepted fgets line.
+printf '%063dcontinue\nstatus\nquit\n' 0 > "$tmp/session-overlong"
+printf '%064d' 0 > "$tmp/session-overlong-eof"
+printf '%062d\nquit\n' 0 > "$tmp/session-max-line"
+
 check help 0 "$BIN" --help
 check version 0 "$BIN" --version
 check session_continue 7 session_exec "$tmp/session-continue" "$BIN" run --interactive "$ROOT/build/exit7"
@@ -645,6 +708,14 @@ check memory_invalid 0 session_exec "$tmp/memory-invalid" "$BIN" run --interacti
 check memory_signal 0 session_exec "$tmp/memory-signal" "$BIN" run --interactive "$ROOT/build/illegal"
 check memory_compact 0 session_exec "$tmp/memory-compact" "$BIN" run --interactive --changes-only "$ROOT/build/stack_words"
 check memory_combo 0 session_exec "$tmp/memory-combo" "$BIN" run --interactive "$ROOT/build/stack_words"
+check memory_range_four 0 session_exec "$tmp/memory-range-four" "$BIN" run --interactive "$ROOT/build/stack_words"
+check memory_range_two 0 session_exec "$tmp/memory-range-two" "$BIN" run --interactive "$ROOT/build/stack_words"
+check memory_range_one 0 session_exec "$tmp/memory-range-one" "$BIN" run --interactive "$ROOT/build/stack_words"
+check memory_range_invalid_count 0 session_exec "$tmp/memory-range-invalid-count" "$BIN" run --interactive "$ROOT/build/stack_words"
+check memory_range_wrap 0 session_exec "$tmp/memory-range-wrap" "$BIN" run --interactive "$ROOT/build/stack_words"
+check session_overlong 0 session_exec "$tmp/session-overlong" "$BIN" run --interactive "$ROOT/build/exit7"
+check session_overlong_eof 0 session_exec "$tmp/session-overlong-eof" "$BIN" run --interactive "$ROOT/build/exit7"
+check session_max_line 0 session_exec "$tmp/session-max-line" "$BIN" run --interactive "$ROOT/build/exit7"
 check session_stack_initial 42 session_exec "$tmp/session-stack-initial" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_stack_fixture 0 session_exec "$tmp/session-stack-fixture" "$BIN" run --interactive "$ROOT/build/stack_words"
 check session_stack_compact 0 session_exec "$tmp/session-stack-compact" "$BIN" run --interactive --changes-only "$ROOT/build/stack_words"
