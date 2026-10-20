@@ -1,12 +1,12 @@
 # Changelog
 
-## v0.2.9 — 2026-10-20 (experimental Linux x86-64 development)
+## v0.2.9 — 2026-10-20 (experimental Linux x86-64 prerelease)
 
 - Added cumulative confirmed instruction-step numbers alongside each of the 16 debugger-local RIP samples. The initial stop is `step=0`, then every successfully verified single-step completion increments and stores its global count before appending the new RIP.
 - Added strict `history [N]` / `h [N]` filtering for the latest **1–16** available samples (default all), preserving chronological display and existing unfiltered behavior. Requests larger than the number of recorded entries display only those available.
 - Invalid values (zero, 17+, leading zero, signs, trailing whitespace, extra arguments, non-decimal text) report a usage hint without resuming, mutating or delivering pending signals.
 - Allocated a separate fixed 128-byte step-index ring synchronized with the original RIP ring; stack frame expands to 1184 bytes with disjoint metadata. No unbounded heap memory, persistent trace, reverse execution or replay.
-- Added 12 Python-free Bash/native NASM regression scenarios, bringing the expected suite to **164**. Corrected a pre-existing unknown-command fixture because `history 1` is now valid.
+- Added 12 Python-free Bash/native NASM regression scenarios, bringing the suite to **164/164 passing on both Ubuntu 22.04 and Ubuntu 24.04**. Corrected a pre-existing unknown-command fixture because `history 1` is now valid. The release workflow built and uploaded the native Linux x86-64 archive plus SHA-256 checksum.
 - Remains experimental Linux x86-64, single launched tracee, Boost Software License 1.0. No new platform backend or stability claim.
 
 
