@@ -63,6 +63,12 @@ extern stdout
 %define SESSION_MAX_STEPS  16         ; bounded operator-requested batch
 %define BYTE_LIMIT         (-844)     ; instruction-byte count 1..8
 %define BYTE_INDEX         (-848)     ; byte offset within inspected word
+%define HISTORY_BUFFER     (-1024)    ; 16 x 8-byte RIP snapshots, -1024..-897
+%define HISTORY_START      (-892)     ; oldest ring slot when full (dword)
+%define HISTORY_PRINT_INDEX (-888)    ; bounded iteration index (dword)
+%define HISTORY_NEXT       (-884)     ; next slot to overwrite (dword)
+%define HISTORY_COUNT      (-880)     ; stored snapshots, 0..16 (dword)
+%define HISTORY_CAPACITY   16
 %define SIGKILL            9
 %define SIGTRAP            5
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
@@ -77,7 +83,8 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step [1..16] | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step [1..16] | history | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_history_entry: db 'RIP history [%u]: 0x%016lx', 10, 0
     msg_step_usage: db 'Usage: step [1..16] or s [1..16] (strict decimal count; default 1)', 0
     msg_byte_usage: db 'Usage: bytes [1..8] or b [1..8] (read-only RIP bytes; default 8)', 0
     msg_instruction_byte: db 'Instruction byte [+%u] at 0x%016lx: 0x%02x', 10, 0
@@ -102,6 +109,8 @@ section .rodata
     cmd_continue: db 'continue', 10, 0
     cmd_quit: db 'quit', 10, 0
     cmd_help: db 'help', 10, 0
+    cmd_history: db 'history', 10, 0
+    cmd_short_history: db 'h', 10, 0
     cmd_short_step: db 's', 10, 0
     cmd_short_regs: db 'r', 10, 0
     cmd_short_status: db 'i', 10, 0
@@ -152,10 +161,12 @@ section .text
 ; Previous snapshot -640..-425, siginfo -400..-273, new regs -256..-41.
 ; Event payload at -664..-657 is distinct from cleanup counters and CPU state.
 ; Prompt control and memory words at -752..-677, text input at -832..-769.
+; RIP history ring at -1024..-897 and metadata at -892..-880 never
+; overlap the tracee register snapshots, input, or other local state.
 debug_run:
     push rbp
     mov rbp, rsp
-    sub rsp, 864
+    sub rsp, 1056
     mov [rbp-8], rdi              ; argv vector from CLI
     mov dword [rbp-264], esi      ; requested maximum steps
     mov dword [rbp-40], edx       ; compact register display flag
@@ -163,6 +174,8 @@ debug_run:
     mov dword [rbp+SESSION_RETURN], 1
     mov dword [rbp+SESSION_STEPPING], 0
     mov dword [rbp+SESSION_REMAINING], 0
+    mov dword [rbp+HISTORY_NEXT], 0
+    mov dword [rbp+HISTORY_COUNT], 0
     mov dword [rbp-36], 0         ; no pending tracee signal initially
     mov dword [rbp-272], 0        ; completed steps
     mov dword [rbp+SIGNAL_STOPS], 0 ; observed signal-delivery stops
@@ -205,6 +218,7 @@ debug_run:
     lea rdi, [rel msg_initial]
     call .print_regs
     call .save_regs             ; persist previous state before stepping
+    call .record_rip            ; initial post-exec RIP, before any stepping
     cmp dword [rbp+SESSION_MODE], 0
     jne .session_entry
     ; Opt-in observation mode samples initial registers but performs no
@@ -285,6 +299,7 @@ debug_run:
     lea rsi, [rbp+REGS]
     call print_register_changes
     call .save_regs             ; make current state the next baseline
+    call .record_rip            ; a confirmed step, not a signal/event stop
     inc dword [rbp-272]
     cmp dword [rbp+SESSION_MODE], 0
     je .bounded_step_check
@@ -518,6 +533,16 @@ debug_run:
     jmp .session_memory_parse
 .session_not_memory:
     lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_history]
+    call strcmp
+    test eax, eax
+    jz .session_history
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_history]
+    call strcmp
+    test eax, eax
+    jz .session_history
+    lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_continue]
     call strcmp
     test eax, eax
@@ -545,6 +570,30 @@ debug_run:
     lea rdi, [rel msg_session_unknown]
     call puts
     jmp .session_prompt
+.session_history:
+    ; Show only debugger-observed RIP snapshots; the first is the
+    ; initial exec stop, later samples are confirmed single steps.
+    ; Chronological presentation begins at zero until the ring fills;
+    ; once full, the next overwrite slot is the oldest saved sample.
+    mov dword [rbp+HISTORY_PRINT_INDEX], 0
+    mov dword [rbp+HISTORY_START], 0
+    cmp dword [rbp+HISTORY_COUNT], HISTORY_CAPACITY
+    jne .history_next
+    mov eax, [rbp+HISTORY_NEXT]
+    mov dword [rbp+HISTORY_START], eax
+.history_next:
+    mov eax, [rbp+HISTORY_PRINT_INDEX]
+    cmp eax, [rbp+HISTORY_COUNT]
+    jae .session_prompt
+    add eax, [rbp+HISTORY_START]
+    and eax, HISTORY_CAPACITY - 1
+    mov rdx, [rbp+HISTORY_BUFFER+rax*8]
+    lea rdi, [rel msg_history_entry]
+    mov esi, [rbp+HISTORY_PRINT_INDEX]
+    xor eax, eax
+    call printf
+    inc dword [rbp+HISTORY_PRINT_INDEX]
+    jmp .history_next
 .session_step:
     mov dword [rbp+SESSION_REMAINING], 1
     mov dword [rbp+SESSION_STEPPING], 1
@@ -1051,6 +1100,22 @@ debug_run:
     xor eax, eax
     call printf
     add rsp, 8
+    ret
+
+; One initial RIP and up to 15 newer step-completion RIPs are retained
+; in a 16-slot circular buffer. The next index is masked instead of
+; dividing; the ring's size must remain a power of two.
+.record_rip:
+    mov eax, [rbp+HISTORY_NEXT]
+    mov rdx, [rbp+REG_RIP]
+    mov [rbp+HISTORY_BUFFER+rax*8], rdx
+    inc eax
+    and eax, HISTORY_CAPACITY - 1
+    mov [rbp+HISTORY_NEXT], eax
+    cmp dword [rbp+HISTORY_COUNT], HISTORY_CAPACITY
+    jae .record_rip_done
+    inc dword [rbp+HISTORY_COUNT]
+.record_rip_done:
     ret
 
 ; A full 216-byte user_regs_struct is 27 qwords. This helper copies only
