@@ -1,5 +1,15 @@
 # Rewind64 development progress
 
+## v0.2.8 bounded instruction-pointer history — 2026-10-20 (development)
+
+- Development branch `dev/v0.2.8-bounded-rip-history`; [pull request #18](https://github.com/sanskarIN/Rewind64/pull/18). **No v0.2.8 release has yet been published.**
+- Implemented read-only `history` / `h` in NASM, tracking up to 16 recent observed RIP values in a 128-byte circular buffer, presented oldest to newest. The first sample comes from the post-exec stop; each subsequent successful verified instruction step adds a sample.
+- Ring and metadata occupy non-overlapping debugger stack slots. Old entries are overwritten at capacity; no tracing file is written, no process state is restored, and inspection does not resume or modify the tracee.
+- Added ten Bash/native Assembly regression scenarios for initial, steps, alias, repeated inspection, 16-entry wrap/double-wrap, aborted signal stepping, invalid input, code/byte coexistence and compact mode.
+- Initial CI at the feature head: **152/152 passed on Ubuntu 22.04 and 24.04**. Complete final PR-head and release-workflow verification before publication.
+- Scope: experimental Linux x86-64, single launched tracee, no Python source/dependency, and no disassembly, process attachment, recording, deterministic replay or true reverse execution.
+
+
 ## v0.2.7 bounded RIP byte inspection — 2026-10-20 (experimental prerelease published)
 
 - **Published:** [v0.2.7 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.7). Changes merged via [PR #17](https://github.com/sanskarIN/Rewind64/pull/17) with ten focused development commits using `sanskarin@outlook.in`.
