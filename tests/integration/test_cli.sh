@@ -733,6 +733,71 @@ instruction_bytes_unknown() {
   assert_count instruction_bytes_unknown 'Instruction byte [' 0 &&
   assert_not_running instruction_bytes_unknown
 }
+# v0.2.8: only initial and confirmed instruction step RIPs enter history.
+history_initial() {
+  assert_count history_initial 'RIP history [' 1 &&
+  assert_contains history_initial "RIP history [0]: 0x${history_entry}" &&
+  assert_contains history_initial 'steps=0 pending_signal=0' &&
+  assert_not_running history_initial
+}
+history_alias() {
+  assert_count history_alias 'RIP history [' 3 &&
+  assert_contains history_alias "RIP history [0]: 0x${history_entry}" &&
+  assert_contains history_alias "RIP history [2]: 0x${history_two}" &&
+  assert_contains history_alias 'steps=2 pending_signal=0' &&
+  assert_not_running history_alias
+}
+history_repeat() {
+  assert_count history_repeat 'RIP history [' 6 &&
+  assert_count history_repeat "RIP history [0]: 0x${history_entry}" 2 &&
+  assert_count history_repeat "RIP history [2]: 0x${history_two}" 2 &&
+  assert_not_running history_repeat
+}
+history_full_ring() {
+  assert_count history_full_ring 'RIP history [' 16 &&
+  assert_contains history_full_ring "RIP history [0]: 0x${history_five}" &&
+  assert_contains history_full_ring "RIP history [15]: 0x${history_twenty}" &&
+  assert_contains history_full_ring 'steps=20 pending_signal=0' &&
+  assert_not_running history_full_ring
+}
+history_wrap_twice() {
+  assert_count history_wrap_twice 'RIP history [' 16 &&
+  assert_contains history_wrap_twice "RIP history [0]: 0x${history_eighteen}" &&
+  assert_contains history_wrap_twice "RIP history [15]: 0x${history_thirtythree}" &&
+  assert_contains history_wrap_twice 'steps=33 pending_signal=0' &&
+  assert_not_running history_wrap_twice
+}
+history_signal() {
+  assert_count history_signal 'RIP history [' 1 &&
+  assert_contains history_signal 'Interactive signal stop: signal 4 pending' &&
+  assert_contains history_signal 'steps=0 pending_signal=4' &&
+  assert_contains history_signal 'Signals forwarded: 0' &&
+  assert_not_running history_signal
+}
+history_invalid_step() {
+  assert_count history_invalid_step 'RIP history [' 1 &&
+  assert_contains history_invalid_step 'Usage: step [1..16]' &&
+  assert_contains history_invalid_step 'steps=0 pending_signal=0' &&
+  assert_not_running history_invalid_step
+}
+history_inspection() {
+  assert_count history_inspection 'RIP history [' 1 &&
+  assert_count history_inspection 'Instruction byte [' 4 &&
+  assert_contains history_inspection 'Code word at RIP=' &&
+  assert_contains history_inspection 'steps=0 pending_signal=0' &&
+  assert_not_running history_inspection
+}
+history_compact() {
+  assert_count history_compact 'RIP history [' 5 &&
+  assert_count history_compact '    GPR:' 0 &&
+  assert_contains history_compact 'steps=4 pending_signal=0' &&
+  assert_not_running history_compact
+}
+history_unknown() {
+  assert_count history_unknown 'RIP history [' 0 &&
+  assert_count history_unknown 'Unknown session command. Type help.' 2 &&
+  assert_not_running history_unknown
+}
 session_code() {
   assert_contains session_code 'Code word at RIP=0x' &&
   assert_contains session_code 'Target exited with status 42' &&
@@ -843,6 +908,17 @@ printf 'step\nb 8\nstatus\nquit\n' > "$tmp/instruction-bytes-compact"
 printf 'bytes 2' > "$tmp/instruction-bytes-eof"
 printf 'byte\nquit\n' > "$tmp/instruction-bytes-unknown"
 
+printf 'history\nstatus\nquit\n' > "$tmp/history-initial"
+printf 's 2\nh\nstatus\nq\n' > "$tmp/history-alias"
+printf 'step 2\nhistory\nh\nq\n' > "$tmp/history-repeat"
+printf 'step 16\nstep 4\nhistory\nstatus\nquit\n' > "$tmp/history-full-ring"
+printf 'step 16\nstep 16\ns 1\nh\nstatus\nq\n' > "$tmp/history-wrap-twice"
+printf 'step 4\nhistory\nstatus\nq\n' > "$tmp/history-signal"
+printf 's 0\nhistory\nstatus\nquit\n' > "$tmp/history-invalid-step"
+printf 'code\nbytes 4\nhistory\nstatus\nquit\n' > "$tmp/history-inspection"
+printf 'step 4\nh\nstatus\nq\n' > "$tmp/history-compact"
+printf 'history 1\nHISTORY\nquit\n' > "$tmp/history-unknown"
+
 # Resolve addresses from symbols in the native ELF fixtures rather than
 # assuming fixed link addresses; no Python or hardcoded ASLR assumptions.
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
@@ -851,6 +927,16 @@ if [[ ! "$memory_base" =~ ^[[:xdigit:]]{1,16}$ || ! "$illegal_entry" =~ ^[[:xdig
   printf 'Missing valid NASM fixture symbols for memory tests\n' >&2
   exit 1
 fi
+history_entry="$(nm -n "$ROOT/build/long_steps" | awk '$3 == "_start" {print $1; exit}')"
+if [[ ! "$history_entry" =~ ^[[:xdigit:]]{1,16}$ ]]; then
+  printf 'Missing valid long_steps _start symbol for history tests\n' >&2
+  exit 1
+fi
+printf -v history_two '%016x' "$((16#$history_entry + 2))"
+printf -v history_five '%016x' "$((16#$history_entry + 5))"
+printf -v history_twenty '%016x' "$((16#$history_entry + 20))"
+printf -v history_eighteen '%016x' "$((16#$history_entry + 18))"
+printf -v history_thirtythree '%016x' "$((16#$history_entry + 33))"
 printf -v memory_second '%016x' "$((16#$memory_base + 8))"
 memory_upper="$(printf '%s' "$memory_base" | tr 'abcdef' 'ABCDEF')"
 printf 'mem 0x%s\nquit\n' "$memory_base" > "$tmp/memory-word"
@@ -931,6 +1017,16 @@ check instruction_bytes_signal 0 session_exec "$tmp/instruction-bytes-signal" "$
 check instruction_bytes_compact 0 session_exec "$tmp/instruction-bytes-compact" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
 check instruction_bytes_eof 0 session_exec "$tmp/instruction-bytes-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check instruction_bytes_unknown 0 session_exec "$tmp/instruction-bytes-unknown" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_initial 0 session_exec "$tmp/history-initial" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_alias 0 session_exec "$tmp/history-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_repeat 0 session_exec "$tmp/history-repeat" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_full_ring 0 session_exec "$tmp/history-full-ring" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_wrap_twice 0 session_exec "$tmp/history-wrap-twice" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_signal 0 session_exec "$tmp/history-signal" "$BIN" run --interactive "$ROOT/build/illegal"
+check history_invalid_step 0 session_exec "$tmp/history-invalid-step" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_inspection 0 session_exec "$tmp/history-inspection" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_compact 0 session_exec "$tmp/history-compact" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
+check history_unknown 0 session_exec "$tmp/history-unknown" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"
