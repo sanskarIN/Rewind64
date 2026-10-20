@@ -1,12 +1,12 @@
 # Changelog
 
-## v0.2.5 - Unreleased (Linux x86-64 experimental development)
+## v0.2.5 - 2026-10-20 (experimental Linux x86-64 prerelease)
 
 - Extended interactive `mem 0xHEX [COUNT]` / `m 0xHEX [COUNT]` to read 1–4 adjacent eight-byte words, defaulting to one word for backward compatibility. The count is exactly one decimal digit from 1 to 4; malformed spacing, counts and trailing text are rejected.
 - Added 64-bit address-wrap preflight before the first `PTRACE_PEEKDATA`; each read still uses `errno`-safe handling for valid all-ones values. Invalid addresses are nonfatal, and reads do not resume the tracee or deliver pending signals.
 - Hardened the 64-byte interactive input buffer: oversized lines are drained and rejected as one command, preventing a fragment such as `continue` from being executed at the next prompt.
-- Expanded the Python-free Bash/Assembly regressions for multiple counts, edge syntax, wrapped ranges, oversized lines, EOF and maximum accepted input length. Linux CI verification is required before declaring a release.
-- Remains a **single-tracee, Linux x86-64-only experimental debugger** with no breakpoints, historical recording, reverse execution or deterministic replay. No prerelease for this version has yet been published.
+- Expanded the Python-free Bash/Assembly regressions for multiple counts, edge syntax, wrapped ranges, oversized lines, EOF and maximum accepted input length. **117/117 checks passed on both Ubuntu 22.04 and 24.04.**
+- Remains a **single-tracee, Linux x86-64-only experimental debugger** with no breakpoints, historical recording, reverse execution or deterministic replay. The experimental v0.2.5 prerelease ships a native Linux x86-64 archive and SHA-256 checksums; **no stable release** is claimed.
 
 ## v0.2.4 - 2026-10-19 (experimental Linux prerelease)
 
