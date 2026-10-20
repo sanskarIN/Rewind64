@@ -17,6 +17,8 @@ extern __errno_location
 extern print_registers
 extern print_register_changes
 extern fgets
+extern strlen
+extern getchar
 extern strcmp
 extern fflush
 extern stdin
@@ -81,6 +83,7 @@ section .rodata
     msg_pending_signal: db 'Interactive signal stop: signal %u pending; choose step, continue or quit.', 10, 0
     msg_session_prompt: db 'rewind64> ', 0
     msg_session_unknown: db 'Unknown session command. Type help.', 0
+    msg_session_overlong: db 'Error: session command too long (maximum 62 bytes); line discarded.', 0
     msg_session_quit: db 'Interactive session ended; tracee terminated and reaped.', 0
     msg_session_steps: db 'Interactive steps completed: %u', 10, 0
     cmd_step: db 'step', 10, 0
@@ -298,6 +301,26 @@ debug_run:
     call fgets
     test rax, rax
     jz .session_quit             ; EOF = safe, explicit shutdown
+    ; A line longer than the 63-byte fgets payload must be discarded
+    ; as a WHOLE, otherwise a trailing fragment could become a command.
+    ; Permit a final newline as byte 63 (62 command bytes).
+    lea rdi, [rbp+SESSION_BUFFER]
+    call strlen
+    cmp rax, SESSION_BUF_SIZE - 1
+    jne .session_dispatch
+    cmp byte [rbp+SESSION_BUFFER+SESSION_BUF_SIZE-2], 10
+    je .session_dispatch
+.session_drain:
+    call getchar
+    cmp eax, -1                ; EOF: no partial command is executed
+    je .session_overlong
+    cmp eax, 10
+    jne .session_drain
+.session_overlong:
+    lea rdi, [rel msg_session_overlong]
+    call puts
+    jmp .session_prompt
+.session_dispatch:
     lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_step]
     call strcmp
