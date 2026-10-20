@@ -1,12 +1,12 @@
 # Changelog
 
-## v0.2.10 — 2026-10-20 (experimental Linux x86-64 development)
+## v0.2.10 — 2026-10-20 (experimental Linux x86-64 prerelease)
 
 - Added read-only interactive `events` / `e` to show debugger PID, confirmed steps, **observed signal-delivery stop count**, **successfully forwarded nonzero-signal resume count**, current pending signal and kernel ptrace exec/exit event totals.
 - Stores the most recently classified true signal-delivery stop number and signed `siginfo_t.si_code`, displaying a second line only after such a stop has occurred. Unlike injected signal counts, signal-stop observations are measured at validation time, before deciding to forward.
 - Does not resume, inject a pending signal, mutate registers or memory, or create a persistent trace file. Existing `status`, `history`, stepping and signal continuation behavior remain intact.
 - Hardened exact `events` and `e` commands to work even when the last input line ends at EOF without a newline. Rejected extra arguments remain non-mutating unknown commands.
-- Added 13 Python-free native NASM/Bash regression scenarios, expanding the suite to **177** cases. The initial run found and then resolved the newline-free EOF edge case; final validation is required before release.
+- Added 13 Python-free native NASM/Bash regression scenarios, expanding the suite to **177/177 passing on both Ubuntu 22.04 and 24.04**. The initial run found and resolved the newline-free EOF edge case. The gated prerelease workflow built and published the native Linux x86-64 archive and its SHA-256 checksum.
 - Experimental Linux x86-64, single launched tracee, Boost Software License 1.0. No stable release, trace recording, deterministic replay or reverse execution is claimed.
 
 
