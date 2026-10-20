@@ -1,5 +1,14 @@
 # Rewind64 development progress
 
+## v0.2.7 bounded RIP byte inspection — 2026-10-20 (development)
+
+- Development branch: `dev/v0.2.7-instruction-byte-inspection`, [pull request #17](https://github.com/sanskarIN/Rewind64/pull/17); **unreleased while validation is pending**.
+- Added native NASM interactive `bytes [N]` / `b [N]` for 1–8 read-only instruction bytes at freshly sampled RIP. Byte order follows rising addresses. The command does not decode instruction boundaries or modify tracee state.
+- Added strict count parsing with a one-byte decimal range, and `errno`-safe `PTRACE_PEEKTEXT` so valid `0xffffffffffffffff` values produce eight `ff` bytes.
+- Added eleven Bash/native Assembly regression scenarios checking NOP data, all-ones, aliases, 1/4/8 counts, signal-stop inspection, compact mode, after-step inspection, EOF and malformed counts.
+- Release gate: compile/tests on Ubuntu 22.04 and 24.04, checked release notes and a gated Linux x86-64 prerelease with SHA-256 checksum. No stable release, disassembler, trace recording or reverse execution is claimed.
+
+
 ## v0.2.6 interactive bounded step batches — 2026-10-20 (experimental prerelease published)
 
 - **Published:** [v0.2.6 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.6). The implementation was merged through [PR #16](https://github.com/sanskarIN/Rewind64/pull/16), with 11 focused development commits using `sanskarin@outlook.in`.
