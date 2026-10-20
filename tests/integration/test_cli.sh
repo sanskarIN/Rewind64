@@ -65,7 +65,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.5-pre'; }
+version() { assert_contains version 'v0.2.6-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -425,6 +425,94 @@ session_signal_step() {
   assert_contains session_signal_step 'Signals forwarded: 1' &&
   assert_contains session_signal_step 'Target terminated by signal 4'
 }
+# v0.2.6: strict interactive batch stepping, interruption and state checks.
+batch_step_four() {
+  assert_count batch_step_four 'After step:' 4 &&
+  assert_count batch_step_four 'Register changes:' 4 &&
+  assert_contains batch_step_four 'steps=4 pending_signal=0' &&
+  assert_contains batch_step_four 'Interactive steps completed: 4' &&
+  assert_not_running batch_step_four
+}
+batch_step_sixteen() {
+  assert_count batch_step_sixteen 'After step:' 16 &&
+  assert_contains batch_step_sixteen 'steps=16 pending_signal=0' &&
+  assert_contains batch_step_sixteen 'Interactive steps completed: 16' &&
+  assert_not_running batch_step_sixteen
+}
+batch_step_mixed() {
+  assert_count batch_step_mixed 'After step:' 5 &&
+  assert_contains batch_step_mixed 'steps=5 pending_signal=0' &&
+  assert_not_running batch_step_mixed
+}
+batch_step_explicit_one() {
+  assert_count batch_step_explicit_one 'After step:' 2 &&
+  assert_contains batch_step_explicit_one 'steps=2 pending_signal=0' &&
+  assert_not_running batch_step_explicit_one
+}
+batch_step_invalid() {
+  assert_count batch_step_invalid 'Usage: step [1..16]' 15 &&
+  assert_count batch_step_invalid 'After step:' 0 &&
+  assert_contains batch_step_invalid 'steps=0 pending_signal=0' &&
+  assert_count batch_step_invalid 'Signals forwarded: 0' 1 &&
+  assert_not_running batch_step_invalid
+}
+batch_step_ill() {
+  assert_contains batch_step_ill 'Interactive signal stop: signal 4 pending' &&
+  assert_count batch_step_ill 'After step:' 0 &&
+  assert_contains batch_step_ill 'steps=0 pending_signal=4' &&
+  assert_contains batch_step_ill 'Signals forwarded: 0' &&
+  assert_not_running batch_step_ill
+}
+batch_step_ill_forward() {
+  assert_contains batch_step_ill_forward 'Interactive signal stop: signal 4 pending' &&
+  assert_contains batch_step_ill_forward 'steps=0 pending_signal=4' &&
+  assert_contains batch_step_ill_forward 'Signals forwarded: 1' &&
+  assert_contains batch_step_ill_forward 'Target terminated by signal 4'
+}
+batch_step_segv() {
+  assert_count batch_step_segv 'After step:' 1 &&
+  assert_contains batch_step_segv 'Interactive signal stop: signal 11 pending' &&
+  assert_contains batch_step_segv 'steps=1 pending_signal=11' &&
+  assert_contains batch_step_segv 'Signals forwarded: 0' &&
+  assert_not_running batch_step_segv
+}
+batch_step_trap() {
+  assert_count batch_step_trap 'After step:' 1 &&
+  assert_contains batch_step_trap 'Interactive signal stop: signal 5 pending' &&
+  assert_contains batch_step_trap 'steps=1 pending_signal=5' &&
+  assert_contains batch_step_trap 'Signals forwarded: 0' &&
+  assert_not_running batch_step_trap
+}
+batch_step_compact() {
+  assert_count batch_step_compact 'After step:' 6 &&
+  assert_count batch_step_compact 'Register changes:' 6 &&
+  assert_count batch_step_compact '    GPR:' 0 &&
+  assert_contains batch_step_compact 'steps=6 pending_signal=0' &&
+  assert_not_running batch_step_compact
+}
+batch_step_inspect() {
+  assert_count batch_step_inspect 'After step:' 2 &&
+  assert_count batch_step_inspect 'Code word at RIP=' 1 &&
+  assert_contains batch_step_inspect 'steps=2 pending_signal=0' &&
+  assert_not_running batch_step_inspect
+}
+batch_step_early_exit() {
+  assert_contains batch_step_early_exit 'Target exited with status 0' &&
+  assert_contains batch_step_early_exit 'Ptrace events: exec=0 exit=1' &&
+  assert_count batch_step_early_exit 'After step:' 2 &&
+  assert_contains batch_step_early_exit 'Interactive steps completed: 2'
+}
+batch_step_invalid_signal() {
+  assert_count batch_step_invalid_signal 'Usage: step [1..16]' 1 &&
+  assert_contains batch_step_invalid_signal 'steps=0 pending_signal=4' &&
+  assert_contains batch_step_invalid_signal 'Signals forwarded: 0' &&
+  assert_not_running batch_step_invalid_signal
+}
+batch_step_no_newline() {
+  assert_count batch_step_no_newline 'After step:' 3 &&
+  assert_contains batch_step_no_newline 'Interactive steps completed: 3' &&
+  assert_not_running batch_step_no_newline
+}
 memory_word() {
   assert_contains memory_word 'Memory word at 0x' &&
   assert_contains memory_word ': 0x1122334455667788' &&
@@ -660,6 +748,21 @@ printf 'step\nstack\nstatus\nquit\n' > "$tmp/session-stack-signal"
 printf 'stack\nk\nquit\n' > "$tmp/session-stack-repeat"
 printf 'code\ns\nstack\nq\n' > "$tmp/session-stack-with-code"
 
+printf 'step 4\nstatus\nquit\n' > "$tmp/batch-step-four"
+printf 's 16\nstatus\nq\n' > "$tmp/batch-step-sixteen"
+printf 's 3\nstep 2\nstatus\nq\n' > "$tmp/batch-step-mixed"
+printf 'step 1\ns 1\nstatus\nquit\n' > "$tmp/batch-step-explicit-one"
+printf 'step 0\ns 17\nstep 01\nstep -1\nstep 1x\nstep 1 \ns 1 2\ns 100\nstep +3\ns \nstep 00\nstep 2\t\nstep 9999\ns 016\ns 1\r\nstatus\nquit\n' > "$tmp/batch-step-invalid"
+printf 'step 5\nstatus\nregs\nquit\n' > "$tmp/batch-step-ill"
+printf 'step 16\nstatus\ncontinue\n' > "$tmp/batch-step-ill-forward"
+printf 'step 16\nstatus\nquit\n' > "$tmp/batch-step-segv"
+printf 's 16\nstatus\nquit\n' > "$tmp/batch-step-trap"
+printf 's 6\nstatus\nq\n' > "$tmp/batch-step-compact"
+printf 'step 2\ncode\nstatus\nq\n' > "$tmp/batch-step-inspect"
+printf 'step 16\n' > "$tmp/batch-step-early-exit"
+printf 'step\ns 0\nstatus\nquit\n' > "$tmp/batch-step-invalid-signal"
+printf 'step 3' > "$tmp/batch-step-no-newline"
+
 # Resolve addresses from symbols in the native ELF fixtures rather than
 # assuming fixed link addresses; no Python or hardcoded ASLR assumptions.
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
@@ -698,6 +801,20 @@ printf '%062d\nquit\n' 0 > "$tmp/session-max-line"
 check help 0 "$BIN" --help
 check version 0 "$BIN" --version
 check session_continue 7 session_exec "$tmp/session-continue" "$BIN" run --interactive "$ROOT/build/exit7"
+check batch_step_four 0 session_exec "$tmp/batch-step-four" "$BIN" run --interactive "$ROOT/build/long_steps"
+check batch_step_sixteen 0 session_exec "$tmp/batch-step-sixteen" "$BIN" run --interactive "$ROOT/build/long_steps"
+check batch_step_mixed 0 session_exec "$tmp/batch-step-mixed" "$BIN" run --interactive "$ROOT/build/long_steps"
+check batch_step_explicit_one 0 session_exec "$tmp/batch-step-explicit-one" "$BIN" run --interactive "$ROOT/build/long_steps"
+check batch_step_invalid 0 session_exec "$tmp/batch-step-invalid" "$BIN" run --interactive "$ROOT/build/long_steps"
+check batch_step_ill 0 session_exec "$tmp/batch-step-ill" "$BIN" run --interactive "$ROOT/build/illegal"
+check batch_step_ill_forward 132 session_exec "$tmp/batch-step-ill-forward" "$BIN" run --interactive "$ROOT/build/illegal"
+check batch_step_segv 0 session_exec "$tmp/batch-step-segv" "$BIN" run --interactive "$ROOT/build/segv"
+check batch_step_trap 0 session_exec "$tmp/batch-step-trap" "$BIN" run --interactive "$ROOT/build/trap"
+check batch_step_compact 0 session_exec "$tmp/batch-step-compact" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
+check batch_step_inspect 0 session_exec "$tmp/batch-step-inspect" "$BIN" run --interactive "$ROOT/build/long_steps"
+check batch_step_early_exit 0 session_exec "$tmp/batch-step-early-exit" "$BIN" run --interactive "$ROOT/build/exit0"
+check batch_step_invalid_signal 0 session_exec "$tmp/batch-step-invalid-signal" "$BIN" run --interactive "$ROOT/build/illegal"
+check batch_step_no_newline 0 session_exec "$tmp/batch-step-no-newline" "$BIN" run --interactive "$ROOT/build/long_steps"
 check memory_word 0 session_exec "$tmp/memory-word" "$BIN" run --interactive "$ROOT/build/stack_words"
 check memory_all_ones 0 session_exec "$tmp/memory-all-ones" "$BIN" run --interactive "$ROOT/build/stack_words"
 check memory_uppercase 0 session_exec "$tmp/memory-uppercase" "$BIN" run --interactive "$ROOT/build/stack_words"

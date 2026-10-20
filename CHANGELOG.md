@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.6 — 2026-10-20 (experimental Linux x86-64 development)
+
+- Added interactive `step N` / `s N` to request **1–16 verified forward instructions** per command. Bare `step` and `s` still execute exactly one instruction.
+- Parses one or two strict decimal count digits; rejects zero, leading zeros, counts over 16, signs, extraneous whitespace and trailing text without resuming the stopped process.
+- Reuses existing `PTRACE_SINGLESTEP`, register snapshots and deltas on **every** completed instruction; cumulative `status` step counts remain accurate.
+- Cancels a pending batch on verified application signal stops and preserves that signal for explicit `step`, `continue` or `quit`. Exec/exit ptrace transitions cancel the batch before automatic continuation.
+- Added 14 native Assembly/Bash integration scenarios, bringing the suite to **131 black-box checks**. Preliminary CI: **131 passed, 0 failed** on both Ubuntu 22.04 and 24.04.
+- This remains experimental Linux x86-64, single launched tracee, Boost Software License 1.0, and Python-free. There is no disassembler, recording, replay or actual reverse execution.
+
+
 ## v0.2.5 - 2026-10-20 (experimental Linux x86-64 prerelease)
 
 - Extended interactive `mem 0xHEX [COUNT]` / `m 0xHEX [COUNT]` to read 1–4 adjacent eight-byte words, defaulting to one word for backward compatibility. The count is exactly one decimal digit from 1 to 4; malformed spacing, counts and trailing text are rejected.
