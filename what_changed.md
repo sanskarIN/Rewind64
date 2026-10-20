@@ -1,5 +1,15 @@
 # Rewind64 development progress
 
+## v0.2.11 classified signal-stop history — 2026-10-20 (development)
+
+- Branch `dev/v0.2.11-signal-stop-history`; [PR #21](https://github.com/sanskarIN/Rewind64/pull/21). Release is gated on final green CI.
+- Native NASM `signals` / `g` displays up to eight genuine validated signal-delivery stop records (signal number, signed `si_code`, global confirmed step count), oldest first.
+- New eight-slot ring uses 128 debugger-local bytes, with distinct stack metadata and preserved alignment, and does not change the tracee or inject pending signals. Synthetic steps and unrelated ptrace events do not become signal history entries.
+- Thirteen black-box Bash/native Assembly cases cover initial empty history, aliases, repeated inspection, SIGILL/SIGSEGV/SIGTRAP, pending batch interruption, status/inspection coexistence, compact mode, no-newline EOF, malformed commands and explicit signal forwarding.
+- The initial CI run found a Bash test-file insertion syntax issue. Restoring the pre-existing `session_code` test and ELF symbol setup fixed it. The corrected suite passed **190/190 on Ubuntu 22.04 and Ubuntu 24.04**.
+- Complete docs, final CI and guarded native Linux prerelease/checksum verification before publication; remains Linux x86-64, Python-free, forward-only and single-tracee.
+
+
 ## v0.2.10 interactive lifecycle diagnostics — 2026-10-20 (experimental prerelease published)
 
 - **Published:** [v0.2.10 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.10). Changes merged via [PR #20](https://github.com/sanskarIN/Rewind64/pull/20) after 12 focused commits using `sanskarin@outlook.in`.
