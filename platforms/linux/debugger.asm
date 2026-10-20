@@ -75,6 +75,12 @@ extern stdout
 %define OBSERVED_SIGNALS   (-1164)   ; valid signal-delivery stops, not forwards
 %define LAST_STOP_SIGNAL   (-1168)   ; last valid stop signal number
 %define LAST_STOP_CODE     (-1172)   ; signed siginfo si_code for last valid stop
+%define SIGNAL_RING        (-1312)   ; 8 records x 16 bytes: signal/code/step/reserved
+%define SIGNAL_RING_NEXT   (-1316)   ; next entry to overwrite (dword)
+%define SIGNAL_RING_COUNT  (-1320)   ; retained stops, 0..8 (dword)
+%define SIGNAL_RING_PRINT  (-1324)   ; chronological print index (dword)
+%define SIGNAL_RING_START  (-1328)   ; oldest record when full (dword)
+%define SIGNAL_RING_CAPACITY 8
 %define SIGKILL            9
 %define SIGTRAP            5
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
@@ -89,7 +95,9 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step [1..16] | history [1..16] | events | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step [1..16] | history [1..16] | events | signals | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_signal_history_entry: db 'Signal history [%u]: signal=%u si_code=%d step=%u', 10, 0
+    msg_signal_history_empty: db 'Signal history: no validated signal-delivery stops yet.', 0
     msg_lifecycle: db 'Lifecycle: pid=%ld steps=%u observed_signals=%u forwarded_signals=%u pending_signal=%u exec_events=%u exit_events=%u', 10, 0
     msg_last_stop: db 'Last signal stop: signal=%u si_code=%d', 10, 0
     msg_history_entry: db 'RIP history [%u]: 0x%016lx step=%u', 10, 0
@@ -123,6 +131,10 @@ section .rodata
     cmd_short_events: db 'e', 10, 0
     cmd_events_eof: db 'events', 0
     cmd_short_events_eof: db 'e', 0
+    cmd_signals: db 'signals', 10, 0
+    cmd_short_signals: db 'g', 10, 0
+    cmd_signals_eof: db 'signals', 0
+    cmd_short_signals_eof: db 'g', 0
     cmd_short_history: db 'h', 10, 0
     cmd_short_step: db 's', 10, 0
     cmd_short_regs: db 'r', 10, 0
@@ -175,12 +187,13 @@ section .text
 ; Event payload at -664..-657 is distinct from cleanup counters and CPU state.
 ; Prompt control and memory words at -752..-677, text input at -832..-769.
 ;; RIP history ring at -1024..-897; matching step-number ring at
-; -1152..-1025. Metadata -1172..-1153 and -892..-880 is disjoint
-; from command input, register snapshots and siginfo.
+; -1152..-1025. A separate 8 x 16-byte signal-stop ring lives at
+; -1312..-1185, with metadata -1328..-1313. Its slots do not overlap
+; metadata -1172..-1153, command input, register state or siginfo.
 debug_run:
     push rbp
     mov rbp, rsp
-    sub rsp, 1184
+    sub rsp, 1344
     mov [rbp-8], rdi              ; argv vector from CLI
     mov dword [rbp-264], esi      ; requested maximum steps
     mov dword [rbp-40], edx       ; compact register display flag
@@ -193,6 +206,8 @@ debug_run:
     mov dword [rbp+OBSERVED_SIGNALS], 0
     mov dword [rbp+LAST_STOP_SIGNAL], 0
     mov dword [rbp+LAST_STOP_CODE], 0
+    mov dword [rbp+SIGNAL_RING_NEXT], 0
+    mov dword [rbp+SIGNAL_RING_COUNT], 0
     mov dword [rbp-36], 0         ; no pending tracee signal initially
     mov dword [rbp-272], 0        ; completed steps
     mov dword [rbp+SIGNAL_STOPS], 0 ; observed signal-delivery stops
@@ -640,6 +655,26 @@ debug_run:
     test eax, eax
     jz .session_events
     lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_signals]
+    call strcmp
+    test eax, eax
+    jz .session_signals
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_signals]
+    call strcmp
+    test eax, eax
+    jz .session_signals
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_signals_eof]
+    call strcmp
+    test eax, eax
+    jz .session_signals
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_signals_eof]
+    call strcmp
+    test eax, eax
+    jz .session_signals
+    lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_continue]
     call strcmp
     test eax, eax
@@ -729,6 +764,38 @@ debug_run:
     xor eax, eax
     call printf
     jmp .session_prompt
+.session_signals:
+    ; Show only successfully classified signal-delivery stops. This
+    ; history does not include synthetic traps, and never resumes the
+    ; tracee or forwards a pending signal.
+    cmp dword [rbp+SIGNAL_RING_COUNT], 0
+    jne .signals_have_entries
+    lea rdi, [rel msg_signal_history_empty]
+    call puts
+    jmp .session_prompt
+.signals_have_entries:
+    mov dword [rbp+SIGNAL_RING_PRINT], 0
+    mov dword [rbp+SIGNAL_RING_START], 0
+    cmp dword [rbp+SIGNAL_RING_COUNT], SIGNAL_RING_CAPACITY
+    jne .signals_next
+    mov eax, [rbp+SIGNAL_RING_NEXT]
+    mov dword [rbp+SIGNAL_RING_START], eax
+.signals_next:
+    mov eax, [rbp+SIGNAL_RING_PRINT]
+    cmp eax, [rbp+SIGNAL_RING_COUNT]
+    jae .session_prompt
+    add eax, [rbp+SIGNAL_RING_START]
+    and eax, SIGNAL_RING_CAPACITY - 1
+    shl eax, 4                  ; 16 bytes per signal record
+    lea rdi, [rel msg_signal_history_entry]
+    mov esi, [rbp+SIGNAL_RING_PRINT]
+    mov edx, [rbp+SIGNAL_RING+rax]
+    mov ecx, [rbp+SIGNAL_RING+rax+4]
+    mov r8d, [rbp+SIGNAL_RING+rax+8]
+    xor eax, eax
+    call printf
+    inc dword [rbp+SIGNAL_RING_PRINT]
+    jmp .signals_next
 .session_step:
     mov dword [rbp+SESSION_REMAINING], 1
     mov dword [rbp+SESSION_STEPPING], 1
@@ -1038,6 +1105,24 @@ debug_run:
     mov [rbp+LAST_STOP_SIGNAL], eax
     mov eax, [rbp+SIGINFO+8]
     mov [rbp+LAST_STOP_CODE], eax
+    ; Record the validated signal, signed si_code and cumulative
+    ; completed steps in a synchronized 8-entry fixed-size ring.
+    mov eax, [rbp+SIGNAL_RING_NEXT]
+    shl eax, 4
+    mov edx, [rbp+LAST_STOP_SIGNAL]
+    mov [rbp+SIGNAL_RING+rax], edx
+    mov edx, [rbp+LAST_STOP_CODE]
+    mov [rbp+SIGNAL_RING+rax+4], edx
+    mov edx, [rbp-272]
+    mov [rbp+SIGNAL_RING+rax+8], edx
+    mov eax, [rbp+SIGNAL_RING_NEXT]
+    inc eax
+    and eax, SIGNAL_RING_CAPACITY - 1
+    mov [rbp+SIGNAL_RING_NEXT], eax
+    cmp dword [rbp+SIGNAL_RING_COUNT], SIGNAL_RING_CAPACITY
+    jae .signal_record_full
+    inc dword [rbp+SIGNAL_RING_COUNT]
+.signal_record_full:
     call .report_signal_stop
     cmp dword [rbp+SESSION_MODE], 0
     je .resume
