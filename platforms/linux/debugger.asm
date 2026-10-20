@@ -121,6 +121,8 @@ section .rodata
     cmd_history: db 'history', 10, 0
     cmd_events: db 'events', 10, 0
     cmd_short_events: db 'e', 10, 0
+    cmd_events_eof: db 'events', 0
+    cmd_short_events_eof: db 'e', 0
     cmd_short_history: db 'h', 10, 0
     cmd_short_step: db 's', 10, 0
     cmd_short_regs: db 'r', 10, 0
@@ -623,6 +625,17 @@ debug_run:
     jz .session_events
     lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_short_events]
+    call strcmp
+    test eax, eax
+    jz .session_events
+    ; Accept exact final command at EOF without a trailing newline.
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_events_eof]
+    call strcmp
+    test eax, eax
+    jz .session_events
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_events_eof]
     call strcmp
     test eax, eax
     jz .session_events
