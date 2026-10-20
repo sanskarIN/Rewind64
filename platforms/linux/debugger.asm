@@ -80,6 +80,7 @@ extern stdout
 %define SIGNAL_RING_COUNT  (-1320)   ; retained stops, 0..8 (dword)
 %define SIGNAL_RING_PRINT  (-1324)   ; chronological print index (dword)
 %define SIGNAL_RING_START  (-1328)   ; oldest record when full (dword)
+%define WAIT_NEXT_SIGNAL   (-1332)   ; interactive PTRACE_CONT-to-next-signal mode
 %define SIGNAL_RING_CAPACITY 8
 %define SIGKILL            9
 %define SIGTRAP            5
@@ -95,7 +96,7 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step [1..16] | history [1..16] | events | signals | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step [1..16] | until-signal | history [1..16] | events | signals | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
     msg_signal_history_entry: db 'Signal history [%u]: signal=%u si_code=%d step=%u', 10, 0
     msg_signal_history_empty: db 'Signal history: no validated signal-delivery stops yet.', 0
     msg_lifecycle: db 'Lifecycle: pid=%ld steps=%u observed_signals=%u forwarded_signals=%u pending_signal=%u exec_events=%u exit_events=%u', 10, 0
@@ -111,7 +112,7 @@ section .rodata
     msg_stack_word: db 'Stack word [%u] at 0x%016lx: 0x%016lx', 10, 0
     msg_code_word: db 'Code word at RIP=0x%016lx: 0x%016lx', 10, 0
     msg_session_status: db 'Session status: pid=%ld steps=%u pending_signal=%u', 10, 0
-    msg_pending_signal: db 'Interactive signal stop: signal %u pending; choose step, continue or quit.', 10, 0
+    msg_pending_signal: db 'Interactive signal stop: signal %u pending; choose step, until-signal, continue or quit.', 10, 0
     msg_session_prompt: db 'rewind64> ', 0
     msg_session_unknown: db 'Unknown session command. Type help.', 0
     msg_session_overlong: db 'Error: session command too long (maximum 62 bytes); line discarded.', 0
@@ -133,6 +134,10 @@ section .rodata
     cmd_short_events_eof: db 'e', 0
     cmd_signals: db 'signals', 10, 0
     cmd_short_signals: db 'g', 10, 0
+    cmd_until_signal: db 'until-signal', 10, 0
+    cmd_short_until_signal: db 'u', 10, 0
+    cmd_until_signal_eof: db 'until-signal', 0
+    cmd_short_until_signal_eof: db 'u', 0
     cmd_signals_eof: db 'signals', 0
     cmd_short_signals_eof: db 'g', 0
     cmd_short_history: db 'h', 10, 0
@@ -188,7 +193,8 @@ section .text
 ; Prompt control and memory words at -752..-677, text input at -832..-769.
 ;; RIP history ring at -1024..-897; matching step-number ring at
 ; -1152..-1025. A separate 8 x 16-byte signal-stop ring lives at
-; -1312..-1185, with metadata -1328..-1313. Its slots do not overlap
+; -1312..-1185, with metadata -1332..-1313 (including the v0.2.12
+; until-signal session flag). Its slots do not overlap
 ; metadata -1172..-1153, command input, register state or siginfo.
 debug_run:
     push rbp
@@ -208,6 +214,7 @@ debug_run:
     mov dword [rbp+LAST_STOP_CODE], 0
     mov dword [rbp+SIGNAL_RING_NEXT], 0
     mov dword [rbp+SIGNAL_RING_COUNT], 0
+    mov dword [rbp+WAIT_NEXT_SIGNAL], 0
     mov dword [rbp-36], 0         ; no pending tracee signal initially
     mov dword [rbp-272], 0        ; completed steps
     mov dword [rbp+SIGNAL_STOPS], 0 ; observed signal-delivery stops
@@ -674,6 +681,28 @@ debug_run:
     call strcmp
     test eax, eax
     jz .session_signals
+    ; Opt-in continue-until-next-real-signal mode. Unlike 'continue',
+    ; this mode returns to the prompt at a validated delivery stop.
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_until_signal]
+    call strcmp
+    test eax, eax
+    jz .session_until_signal
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_until_signal]
+    call strcmp
+    test eax, eax
+    jz .session_until_signal
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_until_signal_eof]
+    call strcmp
+    test eax, eax
+    jz .session_until_signal
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_until_signal_eof]
+    call strcmp
+    test eax, eax
+    jz .session_until_signal
     lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_continue]
     call strcmp
@@ -797,6 +826,7 @@ debug_run:
     inc dword [rbp+SIGNAL_RING_PRINT]
     jmp .signals_next
 .session_step:
+    mov dword [rbp+WAIT_NEXT_SIGNAL], 0
     mov dword [rbp+SESSION_REMAINING], 1
     mov dword [rbp+SESSION_STEPPING], 1
     jmp .step_loop
@@ -1061,9 +1091,20 @@ debug_run:
     lea rdi, [rel msg_memory_usage]
     call puts
     jmp .session_prompt
+.session_until_signal:
+    ; Resumes via PTRACE_CONT; on the next genuine signal-delivery
+    ; stop, show the pending signal and return to the interactive prompt.
+    ; If an earlier pending signal exists, forward it exactly once
+    ; on this resume. Exec events can occur en route and are followed;
+    ; target termination ends the session without fabricating a stop.
+    mov dword [rbp+WAIT_NEXT_SIGNAL], 1
+    mov dword [rbp+SESSION_STEPPING], 0
+    mov dword [rbp+SESSION_REMAINING], 0
+    jmp .resume
 .session_continue:
     ; If paused by a genuine signal-delivery stop, continue forwards
     ; the recorded pending signal rather than silently swallowing it.
+    mov dword [rbp+WAIT_NEXT_SIGNAL], 0
     mov dword [rbp+SESSION_STEPPING], 0
     mov dword [rbp+SESSION_REMAINING], 0
     jmp .resume
@@ -1126,8 +1167,15 @@ debug_run:
     call .report_signal_stop
     cmp dword [rbp+SESSION_MODE], 0
     je .resume
+    ; Single-stepping and opt-in until-signal both return to the
+    ; command prompt on a validated signal-delivery stop. Ordinary
+    ; continue retains its original automatic-forwarding behavior.
+    cmp dword [rbp+WAIT_NEXT_SIGNAL], 0
+    jne .signal_prompt
     cmp dword [rbp+SESSION_STEPPING], 0
-    je .resume                 ; continue remains noninteractive
+    je .resume
+.signal_prompt:
+    mov dword [rbp+WAIT_NEXT_SIGNAL], 0
     mov dword [rbp+SESSION_STEPPING], 0
     mov dword [rbp+SESSION_REMAINING], 0
     lea rdi, [rel msg_pending_signal]
