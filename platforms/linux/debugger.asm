@@ -547,6 +547,65 @@ debug_run:
     call strcmp
     test eax, eax
     jz .session_history
+    ; Optional bounded last-N count: recognize the exact prefixes.
+    ; Reject malformed counts without affecting the stopped tracee.
+    lea rsi, [rbp+SESSION_BUFFER]
+    cmp byte [rsi], 'h'
+    jne .session_not_history_count
+    cmp byte [rsi+1], ' '
+    je .session_history_short_count
+    cmp byte [rsi+1], 'i'
+    jne .session_not_history_count
+    cmp byte [rsi+2], 's'
+    jne .session_not_history_count
+    cmp byte [rsi+3], 't'
+    jne .session_not_history_count
+    cmp byte [rsi+4], 'o'
+    jne .session_not_history_count
+    cmp byte [rsi+5], 'r'
+    jne .session_not_history_count
+    cmp byte [rsi+6], 'y'
+    jne .session_not_history_count
+    cmp byte [rsi+7], ' '
+    jne .session_not_history_count
+    add rsi, 8
+    jmp .session_history_count
+.session_history_short_count:
+    add rsi, 2
+.session_history_count:
+    ; Decimal 1..16, no leading zeros or extra bytes (newline/EOF).
+    movzx eax, byte [rsi]
+    cmp al, '1'
+    jb .session_history_usage
+    cmp al, '9'
+    ja .session_history_usage
+    sub eax, '0'
+    mov dword [rbp+HISTORY_LIMIT], eax
+    inc rsi
+    cmp byte [rsi], 10
+    je .session_history_bounded
+    cmp byte [rsi], 0
+    je .session_history_bounded
+    cmp dword [rbp+HISTORY_LIMIT], 1
+    jne .session_history_usage
+    movzx eax, byte [rsi]
+    cmp al, '0'
+    jb .session_history_usage
+    cmp al, '6'
+    ja .session_history_usage
+    sub eax, '0'
+    add eax, 10
+    mov dword [rbp+HISTORY_LIMIT], eax
+    inc rsi
+    cmp byte [rsi], 10
+    je .session_history_bounded
+    cmp byte [rsi], 0
+    je .session_history_bounded
+.session_history_usage:
+    lea rdi, [rel msg_history_usage]
+    call puts
+    jmp .session_prompt
+.session_not_history_count:
     lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_continue]
     call strcmp
@@ -576,10 +635,20 @@ debug_run:
     call puts
     jmp .session_prompt
 .session_history:
-    ; Show only debugger-observed RIP snapshots; the first is the
-    ; initial exec stop, later samples are confirmed single steps.
-    ; Chronological presentation begins at zero until the ring fills;
-    ; once full, the next overwrite slot is the oldest saved sample.
+    mov eax, [rbp+HISTORY_COUNT]
+    mov dword [rbp+HISTORY_LIMIT], eax
+.session_history_bounded:
+    ; Clamp N to available observations. Compute the number of older
+    ; samples to skip, then select the chronological tail of the ring.
+    mov eax, [rbp+HISTORY_COUNT]
+    mov ecx, [rbp+HISTORY_LIMIT]
+    cmp ecx, eax
+    jbe .history_limit_ready
+    mov ecx, eax
+    mov dword [rbp+HISTORY_LIMIT], ecx
+.history_limit_ready:
+    sub eax, ecx
+    mov dword [rbp+HISTORY_SKIP], eax
     mov dword [rbp+HISTORY_PRINT_INDEX], 0
     mov dword [rbp+HISTORY_START], 0
     cmp dword [rbp+HISTORY_COUNT], HISTORY_CAPACITY
@@ -588,11 +657,13 @@ debug_run:
     mov dword [rbp+HISTORY_START], eax
 .history_next:
     mov eax, [rbp+HISTORY_PRINT_INDEX]
-    cmp eax, [rbp+HISTORY_COUNT]
+    cmp eax, [rbp+HISTORY_LIMIT]
     jae .session_prompt
     add eax, [rbp+HISTORY_START]
+    add eax, [rbp+HISTORY_SKIP]
     and eax, HISTORY_CAPACITY - 1
     mov rdx, [rbp+HISTORY_BUFFER+rax*8]
+    mov ecx, [rbp+HISTORY_STEPS+rax*8]
     lea rdi, [rel msg_history_entry]
     mov esi, [rbp+HISTORY_PRINT_INDEX]
     xor eax, eax
