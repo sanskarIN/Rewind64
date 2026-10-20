@@ -583,6 +583,12 @@ debug_run:
     test ecx, ecx
     jz .session_memory_usage
     mov [rbp+MEMORY_ADDRESS], rdx
+    ; Reject a crossing range BEFORE any ptrace reads are attempted.
+    mov eax, [rbp+MEMORY_LIMIT]
+    dec eax
+    lea r8, [rax*8]
+    add rdx, r8
+    jc .memory_wrap
     mov dword [rbp+MEMORY_INDEX], 0
 .memory_next:
     ; An overflowing address must never wrap to low tracee memory.
