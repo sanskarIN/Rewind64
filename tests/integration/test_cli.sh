@@ -998,7 +998,7 @@ printf 'step 4\nhistory\nstatus\nq\n' > "$tmp/history-signal"
 printf 's 0\nhistory\nstatus\nquit\n' > "$tmp/history-invalid-step"
 printf 'code\nbytes 4\nhistory\nstatus\nquit\n' > "$tmp/history-inspection"
 printf 'step 4\nh\nstatus\nq\n' > "$tmp/history-compact"
-printf 'history 1\nHISTORY\nquit\n' > "$tmp/history-unknown"
+printf 'historyx 1\nHISTORY\nquit\n' > "$tmp/history-unknown"
 
 # v0.2.9: history N keeps only the last N confirmed RIP observations.
 printf 'history\nstatus\nquit\n' > "$tmp/history-step-initial"
