@@ -4,9 +4,7 @@
 
 Rewind64 is an experimental, local-first, open-source native program inspection and debugger project. Its executable debugger logic is written in **x86-64 Assembly**. The first implementation targets **Linux x86-64 only**. Windows, macOS, recording, historical state navigation, and deterministic replay are roadmap items, **not implemented features**.
 
-> **Current published release:** [v0.2.4 experimental prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.4), Linux x86-64 only. This version adds strictly validated read-only `mem 0xHEX` inspection, nonfatal ptrace errors, and Python-free CI on Ubuntu 22.04/24.04. No stable release or reversible execution is claimed. Debug only programs you own or have permission to debug. Recorded process state, once recording is implemented, may contain sensitive data.
-
-> **In development (unreleased v0.2.5):** Optional `mem 0xHEX COUNT` reads 1–4 contiguous 64-bit words (8–32 bytes), with address wrap checks. Oversized session input is drained before command dispatch, avoiding accidental execution of a queued fragment.
+> **Current published release:** [v0.2.5 experimental prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.5), Linux x86-64 only. This version adds bounded read-only `mem 0xHEX [COUNT]` inspection, address-wrap rejection and oversized-command draining. Python-free CI runs on Ubuntu 22.04/24.04. No stable release or reversible execution is claimed. Debug only programs you own or have permission to debug. Trace output can contain sensitive data.
 
 ## Implemented
 
@@ -44,7 +42,7 @@ make fixtures
 make test
 ```
 
-Built executable: `build/rewind64`. A checksum-verified native Linux archive is available on the [v0.2.4 release page](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.4). Build output is untracked. CI assembles canonical source with NASM, tests the result, and uploads a short-retention experimental binary on the [Actions page](https://github.com/sanskarIN/Rewind64/actions). Do not infer binary compatibility across OSes.
+Built executable: `build/rewind64`. A checksum-verified native Linux archive is available on the [v0.2.5 release page](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.5). Build output is untracked. CI assembles canonical source with NASM, tests the result, and uploads a short-retention experimental binary on the [Actions page](https://github.com/sanskarIN/Rewind64/actions). Do not infer binary compatibility across OSes.
 
 ## Usage
 
@@ -76,7 +74,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for ABI notes and current modul
 
 ## Roadmap
 
-1. **v0.1.0:** First experimental Linux process inspection prerelease; **v0.1.1:** bounded stepping and Python-free tests; **v0.1.2:** full register presentation, step accounting, and expanded Linux CI; **v0.1.3:** forward-only register deltas and lifecycle regression tests; **v0.1.4:** opt-in concise CPU deltas, CLI flag ordering, initial-stop checks, and extended fault regressions; **v0.1.5:** signal-delivery diagnostics and repeated handled-signal tests; **v0.1.6:** ptrace exec/exit event classification and re-exec regression tests; **v0.1.7:** group-stop detection and bounded ptrace cleanup/reaping tests; **v0.1.8:** raw exit-event status and signed signal source diagnostics; **v0.1.9:** no-step observation mode and sender PID/UID for user-originated signals; **v0.2.0:** initial experimental interactive Assembly command loop with step, regs, continue and quit; **v0.2.1:** pending-signal handling during interactive stepping, status inspection, and signal-forwarding accounting; **v0.2.2:** read-only RIP code-word inspection and correct handling of valid all-ones ptrace values; **v0.2.3:** bounded four-word RSP stack inspection, invalid-address recovery, and new native Assembly fixtures; **v0.2.4:** strictly validated single-word address reads with `mem` / `m`; **v0.2.5 (in development):** optional 1–4-word reads, address-wrap guards and long-input draining.
+1. **v0.1.0:** First experimental Linux process inspection prerelease; **v0.1.1:** bounded stepping and Python-free tests; **v0.1.2:** full register presentation, step accounting, and expanded Linux CI; **v0.1.3:** forward-only register deltas and lifecycle regression tests; **v0.1.4:** opt-in concise CPU deltas, CLI flag ordering, initial-stop checks, and extended fault regressions; **v0.1.5:** signal-delivery diagnostics and repeated handled-signal tests; **v0.1.6:** ptrace exec/exit event classification and re-exec regression tests; **v0.1.7:** group-stop detection and bounded ptrace cleanup/reaping tests; **v0.1.8:** raw exit-event status and signed signal source diagnostics; **v0.1.9:** no-step observation mode and sender PID/UID for user-originated signals; **v0.2.0:** initial experimental interactive Assembly command loop with step, regs, continue and quit; **v0.2.1:** pending-signal handling during interactive stepping, status inspection, and signal-forwarding accounting; **v0.2.2:** read-only RIP code-word inspection and correct handling of valid all-ones ptrace values; **v0.2.3:** bounded four-word RSP stack inspection, invalid-address recovery, and new native Assembly fixtures; **v0.2.4:** strictly validated single-word address reads with `mem` / `m`; **v0.2.5:** optional 1–4-word reads, address-wrap guards and long-input draining.
 2. **Future v0.3.x+:** Investigate and implement a verified Windows x86-64 backend (previously proposed for v0.2.0; deferred so interactive Linux sessions could be tested first).
 3. **Future milestone:** Investigate macOS Intel debugging APIs and entitlements.
 4. **Future milestone:** Platform abstraction, memory inspection, breakpoint management, and richer interactive stepping.
