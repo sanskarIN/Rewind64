@@ -1035,7 +1035,7 @@ signal_history_forward() {
   assert_contains signal_history_forward 'Signals forwarded: 1' &&
   assert_contains signal_history_forward 'Target terminated by signal 4'
 }
-
+session_code() {
   assert_contains session_code 'Code word at RIP=0x' &&
   assert_contains session_code 'Target exited with status 42' &&
   assert_contains session_code 'Interactive steps completed: 0'
@@ -1202,6 +1202,7 @@ printf 'step\nsignals\ncontinue\n' > "$tmp/signal-history-forward"
 
 
 # assuming fixed link addresses; no Python or hardcoded ASLR assumptions.
+# Resolve addresses from symbols in the native ELF fixtures.
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
 illegal_entry="$(nm -n "$ROOT/build/illegal" | awk '$3 == "_start" {print $1; exit}')"
 if [[ ! "$memory_base" =~ ^[[:xdigit:]]{1,16}$ || ! "$illegal_entry" =~ ^[[:xdigit:]]{1,16}$ ]]; then
@@ -1346,7 +1347,7 @@ check signal_history_unknown 0 session_exec "$tmp/signal-history-unknown" "$BIN"
 check signal_history_eof 0 session_exec "$tmp/signal-history-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check signal_history_alias_eof 0 session_exec "$tmp/signal-history-alias-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check signal_history_forward 132 session_exec "$tmp/signal-history-forward" "$BIN" run --interactive "$ROOT/build/illegal"
- "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
+check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"
 check session_code_signal 0 session_exec "$tmp/session-code-signal" "$BIN" run --interactive "$ROOT/build/illegal"
