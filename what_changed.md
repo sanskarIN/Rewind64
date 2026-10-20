@@ -1,13 +1,13 @@
 # Rewind64 development progress
 
-## v0.2.9 step-numbered RIP history — 2026-10-20 (development)
+## v0.2.9 step-numbered RIP history — 2026-10-20 (experimental prerelease published)
 
-- Branch: `dev/v0.2.9-counted-rip-history`; development [PR #19](https://github.com/sanskarIN/Rewind64/pull/19). **Pre-release not yet published**.
+- **Published:** [v0.2.9 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.9), merged via [PR #19](https://github.com/sanskarIN/Rewind64/pull/19). All 12 feature/maintenance commits used `sanskarin@outlook.in`.
 - NASM debugger adds fixed-size per-sample verified step labels to RIP history: initial post-exec stop `step=0`; successful `PTRACE_SINGLESTEP` completion `step=1` onward.
 - Adds `history [N]` and `h [N]` for the last 1–16 recorded entries, defaulting to all available; prints oldest-to-newest, with strict count validation, no tracing/recording, and no resumed tracee on reads.
 - New 128-byte step-number ring uses disjoint stack slots, with the prior 128-byte RIP ring and bounded display metadata; wrapping preserves the correct step/address association.
 - Added 12 Bash/native Assembly integration cases for step labels, range clamping, alias, validation, ring wraps, read-only inspection, stopped signals, repeated filtering and EOF. A prior unknown-command regression had to change because `history 1` is now recognized.
-- Release gate: 164 black-box tests on Ubuntu 22.04/24.04 and GitHub Actions prerelease packaging, verified before publishing.
+- **164/164 black-box tests passed** on both Ubuntu 22.04 and 24.04, on the final PR head and merged `main` in [GitHub CI](https://github.com/sanskarIN/Rewind64/actions/runs/39371053359). [Pre-release workflow](https://github.com/sanskarIN/Rewind64/actions/runs/39371053377) built and published the Linux x86-64 archive and SHA-256 checksum.
 - Rewind64 remains an experimental forward-only Linux x86-64 single-tracee debugger. No Python; no reverse stepping, past memory reconstruction, replay, or disk trace format.
 
 
