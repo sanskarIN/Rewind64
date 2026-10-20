@@ -65,7 +65,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.8-pre'; }
+version() { assert_contains version 'v0.2.9-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
