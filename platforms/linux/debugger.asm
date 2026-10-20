@@ -69,6 +69,9 @@ extern stdout
 %define HISTORY_NEXT       (-884)     ; next slot to overwrite (dword)
 %define HISTORY_COUNT      (-880)     ; stored snapshots, 0..16 (dword)
 %define HISTORY_CAPACITY   16
+%define HISTORY_STEPS      (-1152)   ; 16 x qword absolute step numbers, -1152..-1025
+%define HISTORY_SKIP       (-1156)   ; entries skipped from oldest (dword)
+%define HISTORY_LIMIT      (-1160)   ; entries requested for this display (dword)
 %define SIGKILL            9
 %define SIGTRAP            5
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
@@ -83,8 +86,9 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step [1..16] | history | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
-    msg_history_entry: db 'RIP history [%u]: 0x%016lx', 10, 0
+    msg_session_intro: db 'Interactive session: step [1..16] | history [1..16] | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_history_entry: db 'RIP history [%u]: 0x%016lx step=%u', 10, 0
+    msg_history_usage: db 'Usage: history [1..16] or h [1..16] (show latest N; default all available)', 0
     msg_step_usage: db 'Usage: step [1..16] or s [1..16] (strict decimal count; default 1)', 0
     msg_byte_usage: db 'Usage: bytes [1..8] or b [1..8] (read-only RIP bytes; default 8)', 0
     msg_instruction_byte: db 'Instruction byte [+%u] at 0x%016lx: 0x%02x', 10, 0
@@ -161,12 +165,13 @@ section .text
 ; Previous snapshot -640..-425, siginfo -400..-273, new regs -256..-41.
 ; Event payload at -664..-657 is distinct from cleanup counters and CPU state.
 ; Prompt control and memory words at -752..-677, text input at -832..-769.
-; RIP history ring at -1024..-897 and metadata at -892..-880 never
-; overlap the tracee register snapshots, input, or other local state.
+;; RIP history ring at -1024..-897; matching step-number ring at
+; -1152..-1025. Metadata -1160..-1153 and -892..-880 is disjoint
+; from command input, register snapshots and siginfo.
 debug_run:
     push rbp
     mov rbp, rsp
-    sub rsp, 1056
+    sub rsp, 1184
     mov [rbp-8], rdi              ; argv vector from CLI
     mov dword [rbp-264], esi      ; requested maximum steps
     mov dword [rbp-40], edx       ; compact register display flag
@@ -299,8 +304,8 @@ debug_run:
     lea rsi, [rbp+REGS]
     call print_register_changes
     call .save_regs             ; make current state the next baseline
+    inc dword [rbp-272]        ; step label must include this completion
     call .record_rip            ; a confirmed step, not a signal/event stop
-    inc dword [rbp-272]
     cmp dword [rbp+SESSION_MODE], 0
     je .bounded_step_check
     ; A counted interactive step request is completed only after a real
@@ -542,6 +547,65 @@ debug_run:
     call strcmp
     test eax, eax
     jz .session_history
+    ; Optional bounded last-N count: recognize the exact prefixes.
+    ; Reject malformed counts without affecting the stopped tracee.
+    lea rsi, [rbp+SESSION_BUFFER]
+    cmp byte [rsi], 'h'
+    jne .session_not_history_count
+    cmp byte [rsi+1], ' '
+    je .session_history_short_count
+    cmp byte [rsi+1], 'i'
+    jne .session_not_history_count
+    cmp byte [rsi+2], 's'
+    jne .session_not_history_count
+    cmp byte [rsi+3], 't'
+    jne .session_not_history_count
+    cmp byte [rsi+4], 'o'
+    jne .session_not_history_count
+    cmp byte [rsi+5], 'r'
+    jne .session_not_history_count
+    cmp byte [rsi+6], 'y'
+    jne .session_not_history_count
+    cmp byte [rsi+7], ' '
+    jne .session_not_history_count
+    add rsi, 8
+    jmp .session_history_count
+.session_history_short_count:
+    add rsi, 2
+.session_history_count:
+    ; Decimal 1..16, no leading zeros or extra bytes (newline/EOF).
+    movzx eax, byte [rsi]
+    cmp al, '1'
+    jb .session_history_usage
+    cmp al, '9'
+    ja .session_history_usage
+    sub eax, '0'
+    mov dword [rbp+HISTORY_LIMIT], eax
+    inc rsi
+    cmp byte [rsi], 10
+    je .session_history_bounded
+    cmp byte [rsi], 0
+    je .session_history_bounded
+    cmp dword [rbp+HISTORY_LIMIT], 1
+    jne .session_history_usage
+    movzx eax, byte [rsi]
+    cmp al, '0'
+    jb .session_history_usage
+    cmp al, '6'
+    ja .session_history_usage
+    sub eax, '0'
+    add eax, 10
+    mov dword [rbp+HISTORY_LIMIT], eax
+    inc rsi
+    cmp byte [rsi], 10
+    je .session_history_bounded
+    cmp byte [rsi], 0
+    je .session_history_bounded
+.session_history_usage:
+    lea rdi, [rel msg_history_usage]
+    call puts
+    jmp .session_prompt
+.session_not_history_count:
     lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_continue]
     call strcmp
@@ -571,10 +635,20 @@ debug_run:
     call puts
     jmp .session_prompt
 .session_history:
-    ; Show only debugger-observed RIP snapshots; the first is the
-    ; initial exec stop, later samples are confirmed single steps.
-    ; Chronological presentation begins at zero until the ring fills;
-    ; once full, the next overwrite slot is the oldest saved sample.
+    mov eax, [rbp+HISTORY_COUNT]
+    mov dword [rbp+HISTORY_LIMIT], eax
+.session_history_bounded:
+    ; Clamp N to available observations. Compute the number of older
+    ; samples to skip, then select the chronological tail of the ring.
+    mov eax, [rbp+HISTORY_COUNT]
+    mov ecx, [rbp+HISTORY_LIMIT]
+    cmp ecx, eax
+    jbe .history_limit_ready
+    mov ecx, eax
+    mov dword [rbp+HISTORY_LIMIT], ecx
+.history_limit_ready:
+    sub eax, ecx
+    mov dword [rbp+HISTORY_SKIP], eax
     mov dword [rbp+HISTORY_PRINT_INDEX], 0
     mov dword [rbp+HISTORY_START], 0
     cmp dword [rbp+HISTORY_COUNT], HISTORY_CAPACITY
@@ -583,11 +657,13 @@ debug_run:
     mov dword [rbp+HISTORY_START], eax
 .history_next:
     mov eax, [rbp+HISTORY_PRINT_INDEX]
-    cmp eax, [rbp+HISTORY_COUNT]
+    cmp eax, [rbp+HISTORY_LIMIT]
     jae .session_prompt
     add eax, [rbp+HISTORY_START]
+    add eax, [rbp+HISTORY_SKIP]
     and eax, HISTORY_CAPACITY - 1
     mov rdx, [rbp+HISTORY_BUFFER+rax*8]
+    mov ecx, [rbp+HISTORY_STEPS+rax*8]
     lea rdi, [rel msg_history_entry]
     mov esi, [rbp+HISTORY_PRINT_INDEX]
     xor eax, eax
@@ -1109,6 +1185,8 @@ debug_run:
     mov eax, [rbp+HISTORY_NEXT]
     mov rdx, [rbp+REG_RIP]
     mov [rbp+HISTORY_BUFFER+rax*8], rdx
+    mov edx, [rbp-272]         ; cumulative confirmed steps, initial=0
+    mov [rbp+HISTORY_STEPS+rax*8], rdx
     inc eax
     and eax, HISTORY_CAPACITY - 1
     mov [rbp+HISTORY_NEXT], eax
