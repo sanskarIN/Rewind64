@@ -946,6 +946,11 @@ events_compact() {
   assert_count events_compact '    GPR:' 0 &&
   assert_not_running events_compact
 }
+events_alias_eof() {
+  assert_contains events_alias_eof 'steps=0 observed_signals=0 forwarded_signals=0 pending_signal=0 exec_events=0 exit_events=0' &&
+  assert_contains events_alias_eof 'Interactive session ended;' &&
+  assert_not_running events_alias_eof
+}
 events_eof() {
   assert_contains events_eof 'steps=0 observed_signals=0 forwarded_signals=0 pending_signal=0 exec_events=0 exit_events=0' &&
   assert_contains events_eof 'Interactive session ended;' &&
@@ -1100,6 +1105,7 @@ printf 'step 16\nevents\nquit\n' > "$tmp/events-batch-signal"
 printf 'step 4\ne\nquit\n' > "$tmp/events-compact"
 printf 'events' > "$tmp/events-eof"
 
+printf 'e' > "$tmp/events-alias-eof"
 # Resolve addresses from symbols in the native ELF fixtures rather than
 # assuming fixed link addresses; no Python or hardcoded ASLR assumptions.
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
@@ -1232,6 +1238,7 @@ check events_sigtrap 0 session_exec "$tmp/events-sigtrap" "$BIN" run --interacti
 check events_batch_signal 0 session_exec "$tmp/events-batch-signal" "$BIN" run --interactive "$ROOT/build/illegal"
 check events_compact 0 session_exec "$tmp/events-compact" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
 check events_eof 0 session_exec "$tmp/events-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
+check events_alias_eof 0 session_exec "$tmp/events-alias-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"
