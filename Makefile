@@ -109,6 +109,12 @@ build/handled_signal.o: tests/fixtures/handled_signal.asm | build
 build/handled_signal: build/handled_signal.o
 	$(LD) -o $@ $<
 
+build/signal_burst.o: tests/fixtures/signal_burst.asm | build
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/signal_burst: build/signal_burst.o
+	$(LD) -o $@ $<
+
 build/reexec.o: tests/fixtures/reexec.asm | build
 	$(NASM) $(NASMFLAGS) -o $@ $<
 
@@ -151,7 +157,7 @@ build/invalid_rsp.o: tests/fixtures/invalid_rsp.asm | build
 build/invalid_rsp: build/invalid_rsp.o
 	$(LD) -o $@ $<
 
-fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps build/illegal build/divzero build/exit42 build/handled_signal build/reexec build/group_stop build/thread_signal build/exit_group build/all_ones build/stack_words build/invalid_rsp
+fixtures: build/exit0 build/exit7 build/trap build/argv build/signal_usr1 build/register_fixture build/exit255 build/signal_term build/segv build/long_steps build/illegal build/divzero build/exit42 build/handled_signal build/signal_burst build/reexec build/group_stop build/thread_signal build/exit_group build/all_ones build/stack_words build/invalid_rsp
 
 test: all fixtures
 	bash tests/integration/test_cli.sh
