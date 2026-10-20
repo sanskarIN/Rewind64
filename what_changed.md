@@ -1,13 +1,13 @@
 # Rewind64 development progress
 
-## v0.2.5 bounded memory inspection and interactive hardening — 2026-10-20 (unreleased)
+## v0.2.5 bounded memory inspection and interactive hardening — 2026-10-20 (experimental prerelease published)
 
-- Development branch: `dev/v0.2.5-bounded-memory-hardening`. **No v0.2.5 prerelease or stable release is claimed.**
+- **Published:** [v0.2.5 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.5). The work was merged through [PR #15](https://github.com/sanskarIN/Rewind64/pull/15), with 12 authored commits using `sanskarin@outlook.in`.
 - Added `mem 0xHEX [1..4]` / `m 0xHEX [1..4]` with a strict decimal count, a one-word default, a maximum of four consecutive eight-byte reads, range-overflow preflight, and per-word `errno`-safe ptrace handling.
 - Rejected invalid counts, extraneous spaces and address arithmetic wrap without running the tracee or forwarding pending signals.
 - Hardened the input loop so a command longer than the 63-byte `fgets` payload is drained to newline/EOF and discarded, preventing its suffix from being dispatched independently.
 - Added native Bash regression cases for four words, two words, an explicit single word, malformed counts, 64-bit range wrap, long input with a `continue` suffix, long input at EOF, and the maximum accepted line length.
-- Next gate: NASM build and integration suite on Ubuntu 22.04/24.04 in GitHub Actions, followed by review; this work does not implement recording, reverse stepping, replay, attach, or a Windows backend. Python remains absent from the build and tests.
+- **117/117 native integration tests passed on both Ubuntu 22.04 and 24.04** on the final PR head: https://github.com/sanskarIN/Rewind64/actions/runs/39361937180 . The release workflow rebuilt, tested, packaged and published the Linux binary and SHA-256 checksums: https://github.com/sanskarIN/Rewind64/actions/runs/39362052585 . This work does not implement recording, reverse stepping, replay, attach, or a Windows backend. Python remains absent from the build and tests.
 
 ## v0.2.4 strict single-word memory inspection — 2026-10-19
 
