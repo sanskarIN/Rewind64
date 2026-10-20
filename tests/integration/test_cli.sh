@@ -798,6 +798,87 @@ history_unknown() {
   assert_count history_unknown 'Unknown session command. Type help.' 2 &&
   assert_not_running history_unknown
 }
+# v0.2.9: retain cumulative step numbers and select a bounded history tail.
+history_step_initial() {
+  assert_count history_step_initial 'RIP history [' 1 &&
+  assert_contains history_step_initial 'step=0' &&
+  assert_contains history_step_initial 'steps=0 pending_signal=0' &&
+  assert_not_running history_step_initial
+}
+history_step_three() {
+  assert_count history_step_three 'RIP history [' 4 &&
+  assert_contains history_step_three 'RIP history [0]:' &&
+  assert_contains history_step_three 'step=0' &&
+  assert_contains history_step_three 'step=1' &&
+  assert_contains history_step_three 'step=2' &&
+  assert_contains history_step_three 'step=3' &&
+  assert_contains history_step_three 'steps=3 pending_signal=0' &&
+  assert_not_running history_step_three
+}
+history_tail_one() {
+  assert_count history_tail_one 'RIP history [' 1 &&
+  assert_contains history_tail_one "RIP history [0]: 0x${history_twenty} step=20" &&
+  assert_contains history_tail_one 'steps=20 pending_signal=0' &&
+  assert_not_running history_tail_one
+}
+history_tail_three() {
+  assert_count history_tail_three 'RIP history [' 3 &&
+  assert_contains history_tail_three "RIP history [0]: 0x${history_eighteen} step=18" &&
+  assert_contains history_tail_three "RIP history [2]: 0x${history_twenty} step=20" &&
+  assert_not_running history_tail_three
+}
+history_tail_alias() {
+  assert_count history_tail_alias 'RIP history [' 2 &&
+  assert_contains history_tail_alias 'step=3' &&
+  assert_contains history_tail_alias 'step=4' &&
+  assert_count history_tail_alias 'step=0' 0 &&
+  assert_not_running history_tail_alias
+}
+history_tail_clamp() {
+  assert_count history_tail_clamp 'RIP history [' 3 &&
+  assert_contains history_tail_clamp 'step=0' &&
+  assert_contains history_tail_clamp 'step=2' &&
+  assert_not_running history_tail_clamp
+}
+history_tail_invalid() {
+  assert_count history_tail_invalid 'Usage: history [1..16]' 16 &&
+  assert_count history_tail_invalid 'RIP history [' 0 &&
+  assert_contains history_tail_invalid 'steps=0 pending_signal=0' &&
+  assert_not_running history_tail_invalid
+}
+history_tail_signal() {
+  assert_count history_tail_signal 'RIP history [' 1 &&
+  assert_contains history_tail_signal 'step=0' &&
+  assert_contains history_tail_signal 'Interactive signal stop: signal 4 pending' &&
+  assert_contains history_tail_signal 'steps=0 pending_signal=4' &&
+  assert_contains history_tail_signal 'Signals forwarded: 0' &&
+  assert_not_running history_tail_signal
+}
+history_tail_inspection() {
+  assert_count history_tail_inspection 'RIP history [' 1 &&
+  assert_contains history_tail_inspection 'step=1' &&
+  assert_contains history_tail_inspection 'Code word at RIP=' &&
+  assert_count history_tail_inspection 'Instruction byte [' 2 &&
+  assert_not_running history_tail_inspection
+}
+history_tail_repeat() {
+  assert_count history_tail_repeat 'RIP history [' 4 &&
+  assert_count history_tail_repeat 'step=4' 2 &&
+  assert_count history_tail_repeat 'step=5' 2 &&
+  assert_not_running history_tail_repeat
+}
+history_tail_eof() {
+  assert_count history_tail_eof 'RIP history [' 1 &&
+  assert_contains history_tail_eof 'step=2' &&
+  assert_contains history_tail_eof 'Interactive session ended;' &&
+  assert_not_running history_tail_eof
+}
+history_tail_wrap() {
+  assert_count history_tail_wrap 'RIP history [' 16 &&
+  assert_contains history_tail_wrap "RIP history [0]: 0x${history_eighteen} step=18" &&
+  assert_contains history_tail_wrap "RIP history [15]: 0x${history_thirtythree} step=33" &&
+  assert_not_running history_tail_wrap
+}
 session_code() {
   assert_contains session_code 'Code word at RIP=0x' &&
   assert_contains session_code 'Target exited with status 42' &&
@@ -919,6 +1000,20 @@ printf 'code\nbytes 4\nhistory\nstatus\nquit\n' > "$tmp/history-inspection"
 printf 'step 4\nh\nstatus\nq\n' > "$tmp/history-compact"
 printf 'history 1\nHISTORY\nquit\n' > "$tmp/history-unknown"
 
+# v0.2.9: history N keeps only the last N confirmed RIP observations.
+printf 'history\nstatus\nquit\n' > "$tmp/history-step-initial"
+printf 'step 3\nh\nstatus\nquit\n' > "$tmp/history-step-three"
+printf 'step 16\nstep 4\nhistory 1\nstatus\nquit\n' > "$tmp/history-tail-one"
+printf 'step 16\nstep 4\nhistory 3\nq\n' > "$tmp/history-tail-three"
+printf 'step 4\nh 2\nquit\n' > "$tmp/history-tail-alias"
+printf 's 2\nhistory 16\nquit\n' > "$tmp/history-tail-clamp"
+printf 'history 0\nhistory 17\nhistory 99\nhistory 01\nhistory -1\nhistory +1\nhistory 1x\nhistory 1 \nhistory 1 2\nh 016\nh x\nh \nh 1 \nh  2\nhistory 2\t\nhistory 1\r\nstatus\nquit\n' > "$tmp/history-tail-invalid"
+printf 'step 4\nhistory 1\nstatus\nquit\n' > "$tmp/history-tail-signal"
+printf 'step\ncode\nbytes 2\nhistory 1\nq\n' > "$tmp/history-tail-inspection"
+printf 'step 5\nhistory 2\nh 2\nquit\n' > "$tmp/history-tail-repeat"
+printf 's 2\nhistory 1' > "$tmp/history-tail-eof"
+printf 'step 16\nstep 16\ns 1\nhistory 16\nq\n' > "$tmp/history-tail-wrap"
+
 # Resolve addresses from symbols in the native ELF fixtures rather than
 # assuming fixed link addresses; no Python or hardcoded ASLR assumptions.
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
@@ -1027,6 +1122,18 @@ check history_invalid_step 0 session_exec "$tmp/history-invalid-step" "$BIN" run
 check history_inspection 0 session_exec "$tmp/history-inspection" "$BIN" run --interactive "$ROOT/build/long_steps"
 check history_compact 0 session_exec "$tmp/history-compact" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
 check history_unknown 0 session_exec "$tmp/history-unknown" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_step_initial 0 session_exec "$tmp/history-step-initial" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_step_three 0 session_exec "$tmp/history-step-three" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_tail_one 0 session_exec "$tmp/history-tail-one" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_tail_three 0 session_exec "$tmp/history-tail-three" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_tail_alias 0 session_exec "$tmp/history-tail-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_tail_clamp 0 session_exec "$tmp/history-tail-clamp" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_tail_invalid 0 session_exec "$tmp/history-tail-invalid" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_tail_signal 0 session_exec "$tmp/history-tail-signal" "$BIN" run --interactive "$ROOT/build/illegal"
+check history_tail_inspection 0 session_exec "$tmp/history-tail-inspection" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_tail_repeat 0 session_exec "$tmp/history-tail-repeat" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_tail_eof 0 session_exec "$tmp/history-tail-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
+check history_tail_wrap 0 session_exec "$tmp/history-tail-wrap" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"
