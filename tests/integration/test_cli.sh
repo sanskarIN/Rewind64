@@ -956,7 +956,86 @@ events_eof() {
   assert_contains events_eof 'Interactive session ended;' &&
   assert_not_running events_eof
 }
-session_code() {
+# v0.2.11: classified signal-delivery stops only; bounded, read-only history.
+signal_history_empty() {
+  assert_count signal_history_empty 'Signal history: no validated signal-delivery stops yet.' 1 &&
+  assert_count signal_history_empty 'Signal history [' 0 &&
+  assert_contains signal_history_empty 'steps=0 pending_signal=0' &&
+  assert_not_running signal_history_empty
+}
+signal_history_alias() {
+  assert_count signal_history_alias 'Signal history: no validated signal-delivery stops yet.' 1 &&
+  assert_not_running signal_history_alias
+}
+signal_history_repeated_empty() {
+  assert_count signal_history_repeated_empty 'Signal history: no validated signal-delivery stops yet.' 3 &&
+  assert_count signal_history_repeated_empty 'Signal history [' 0 &&
+  assert_not_running signal_history_repeated_empty
+}
+signal_history_ill() {
+  assert_contains signal_history_ill 'Interactive signal stop: signal 4 pending' &&
+  assert_count signal_history_ill 'Signal history [' 1 &&
+  assert_contains signal_history_ill 'Signal history [0]: signal=4 si_code=' &&
+  assert_contains signal_history_ill ' step=0' &&
+  assert_contains signal_history_ill 'steps=0 observed_signals=1 forwarded_signals=0 pending_signal=4' &&
+  assert_not_running signal_history_ill
+}
+signal_history_segv() {
+  assert_contains signal_history_segv 'Interactive signal stop: signal 11 pending' &&
+  assert_count signal_history_segv 'Signal history [' 1 &&
+  assert_contains signal_history_segv 'Signal history [0]: signal=11 si_code=' &&
+  assert_contains signal_history_segv ' step=1' &&
+  assert_not_running signal_history_segv
+}
+signal_history_trap() {
+  assert_contains signal_history_trap 'Interactive signal stop: signal 5 pending' &&
+  assert_count signal_history_trap 'Signal history [' 1 &&
+  assert_contains signal_history_trap 'Signal history [0]: signal=5 si_code=' &&
+  assert_contains signal_history_trap ' step=1' &&
+  assert_not_running signal_history_trap
+}
+signal_history_batch() {
+  assert_contains signal_history_batch 'Interactive signal stop: signal 4 pending' &&
+  assert_count signal_history_batch 'Signal history [' 1 &&
+  assert_contains signal_history_batch 'Signal history [0]: signal=4 si_code=' &&
+  assert_contains signal_history_batch ' step=0' &&
+  assert_not_running signal_history_batch
+}
+signal_history_inspection() {
+  assert_count signal_history_inspection 'Signal history: no validated signal-delivery stops yet.' 1 &&
+  assert_contains signal_history_inspection 'Code word at RIP=' &&
+  assert_count signal_history_inspection 'Instruction byte [' 2 &&
+  assert_count signal_history_inspection 'RIP history [' 1 &&
+  assert_not_running signal_history_inspection
+}
+signal_history_compact() {
+  assert_count signal_history_compact 'Signal history [' 1 &&
+  assert_count signal_history_compact '    GPR:' 0 &&
+  assert_contains signal_history_compact 'steps=0 observed_signals=1 forwarded_signals=0 pending_signal=4' &&
+  assert_not_running signal_history_compact
+}
+signal_history_unknown() {
+  assert_count signal_history_unknown 'Unknown session command. Type help.' 4 &&
+  assert_count signal_history_unknown 'Signal history [' 0 &&
+  assert_not_running signal_history_unknown
+}
+signal_history_eof() {
+  assert_contains signal_history_eof 'Signal history: no validated signal-delivery stops yet.' &&
+  assert_contains signal_history_eof 'Interactive session ended;' &&
+  assert_not_running signal_history_eof
+}
+signal_history_alias_eof() {
+  assert_contains signal_history_alias_eof 'Signal history: no validated signal-delivery stops yet.' &&
+  assert_contains signal_history_alias_eof 'Interactive session ended;' &&
+  assert_not_running signal_history_alias_eof
+}
+signal_history_forward() {
+  assert_count signal_history_forward 'Signal history [' 1 &&
+  assert_contains signal_history_forward 'Signal history [0]: signal=4 si_code=' &&
+  assert_contains signal_history_forward 'Signals forwarded: 1' &&
+  assert_contains signal_history_forward 'Target terminated by signal 4'
+}
+
   assert_contains session_code 'Code word at RIP=0x' &&
   assert_contains session_code 'Target exited with status 42' &&
   assert_contains session_code 'Interactive steps completed: 0'
@@ -1106,7 +1185,22 @@ printf 'step 4\ne\nquit\n' > "$tmp/events-compact"
 printf 'events' > "$tmp/events-eof"
 
 printf 'e' > "$tmp/events-alias-eof"
-# Resolve addresses from symbols in the native ELF fixtures rather than
+# v0.2.11 signal-stop history scripts.
+printf 'signals\nstatus\nq\n' > "$tmp/signal-history-empty"
+printf 'g\nquit\n' > "$tmp/signal-history-alias"
+printf 'signals\ng\nsignals\nquit\n' > "$tmp/signal-history-repeated-empty"
+printf 'step\nsignals\nevents\nquit\n' > "$tmp/signal-history-ill"
+printf 'step\nstep\ng\nq\n' > "$tmp/signal-history-segv"
+printf 'step\nstep\nsignals\nquit\n' > "$tmp/signal-history-trap"
+printf 'step 16\nsignals\nquit\n' > "$tmp/signal-history-batch"
+printf 'code\nbytes 2\nhistory 1\nsignals\nquit\n' > "$tmp/signal-history-inspection"
+printf 'step\nsignals\nevents\nquit\n' > "$tmp/signal-history-compact"
+printf 'signals 1\ng 1\nSIGNALS\nsignalz\nquit\n' > "$tmp/signal-history-unknown"
+printf 'signals' > "$tmp/signal-history-eof"
+printf 'g' > "$tmp/signal-history-alias-eof"
+printf 'step\nsignals\ncontinue\n' > "$tmp/signal-history-forward"
+
+
 # assuming fixed link addresses; no Python or hardcoded ASLR assumptions.
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
 illegal_entry="$(nm -n "$ROOT/build/illegal" | awk '$3 == "_start" {print $1; exit}')"
@@ -1239,7 +1333,20 @@ check events_batch_signal 0 session_exec "$tmp/events-batch-signal" "$BIN" run -
 check events_compact 0 session_exec "$tmp/events-compact" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
 check events_eof 0 session_exec "$tmp/events-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check events_alias_eof 0 session_exec "$tmp/events-alias-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
-check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
+check signal_history_empty 0 session_exec "$tmp/signal-history-empty" "$BIN" run --interactive "$ROOT/build/long_steps"
+check signal_history_alias 0 session_exec "$tmp/signal-history-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
+check signal_history_repeated_empty 0 session_exec "$tmp/signal-history-repeated-empty" "$BIN" run --interactive "$ROOT/build/long_steps"
+check signal_history_ill 0 session_exec "$tmp/signal-history-ill" "$BIN" run --interactive "$ROOT/build/illegal"
+check signal_history_segv 0 session_exec "$tmp/signal-history-segv" "$BIN" run --interactive "$ROOT/build/segv"
+check signal_history_trap 0 session_exec "$tmp/signal-history-trap" "$BIN" run --interactive "$ROOT/build/trap"
+check signal_history_batch 0 session_exec "$tmp/signal-history-batch" "$BIN" run --interactive "$ROOT/build/illegal"
+check signal_history_inspection 0 session_exec "$tmp/signal-history-inspection" "$BIN" run --interactive "$ROOT/build/long_steps"
+check signal_history_compact 0 session_exec "$tmp/signal-history-compact" "$BIN" run --interactive --changes-only "$ROOT/build/illegal"
+check signal_history_unknown 0 session_exec "$tmp/signal-history-unknown" "$BIN" run --interactive "$ROOT/build/long_steps"
+check signal_history_eof 0 session_exec "$tmp/signal-history-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
+check signal_history_alias_eof 0 session_exec "$tmp/signal-history-alias-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
+check signal_history_forward 132 session_exec "$tmp/signal-history-forward" "$BIN" run --interactive "$ROOT/build/illegal"
+ "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"
 check session_code_signal 0 session_exec "$tmp/session-code-signal" "$BIN" run --interactive "$ROOT/build/illegal"
