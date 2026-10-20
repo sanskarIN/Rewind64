@@ -1,12 +1,12 @@
 # Changelog
 
-## v0.2.7 — 2026-10-20 (experimental Linux x86-64 development)
+## v0.2.7 — 2026-10-20 (experimental Linux x86-64 prerelease)
 
 - Added read-only interactive `bytes [N]` / `b [N]`, displaying **1–8 bytes from current RIP** (default eight) in ascending address order; this is byte inspection, **not disassembly**.
 - Reuses `PTRACE_GETREGS` and one `PTRACE_PEEKTEXT`, clearing `errno` to distinguish valid all-ones bytes from failed ptrace requests. Unreadable code returns nonfatally to the session prompt.
 - Strict single-digit 1–8 counts reject zero, signs, extra whitespace, multiple arguments, trailing junk and out-of-range values without resuming or delivering pending tracee signals.
-- Added 11 Python-free Bash/native NASM regression scenarios for one/eight-byte reads, aliases, known NOP and all-ones bytes, malformed syntax, inspection after stepping and at pending SIGILL, compact mode and EOF.
-- Retains Boost Software License 1.0, single launched tracee, Linux x86-64 experimental scope and Assembly debugger logic. No breakpoints, trace recording, reverse execution, process attachment or stable release.
+- Added 11 Python-free Bash/native NASM regression scenarios for one/eight-byte reads, aliases, known NOP and all-ones bytes, malformed syntax, inspection after stepping and at pending SIGILL, compact mode and EOF. **142/142 tests passed on both Ubuntu 22.04 and 24.04** before publication.
+- Retains Boost Software License 1.0, single launched tracee, Linux x86-64 experimental scope and Assembly debugger logic. No breakpoints, trace recording, reverse execution, process attachment or stable release. The v0.2.7 prerelease ships a native Linux x86-64 archive with a SHA-256 checksum.
 
 
 ## v0.2.6 — 2026-10-20 (experimental Linux x86-64 prerelease)
