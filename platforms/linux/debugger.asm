@@ -59,6 +59,8 @@ extern stdout
 %define MEMORY_CURRENT     (-768)        ; computed address checked for wrap
 %define SESSION_BUFFER     (-832)        ; 64-byte input buffer, -832..-769
 %define SESSION_BUF_SIZE    64
+%define SESSION_REMAINING  (-840)       ; dword batch steps left, outside input buffer
+%define SESSION_MAX_STEPS  16         ; bounded operator-requested batch
 %define SIGKILL            9
 %define SIGTRAP            5
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
@@ -152,6 +154,7 @@ debug_run:
     mov dword [rbp+SESSION_MODE], ecx
     mov dword [rbp+SESSION_RETURN], 1
     mov dword [rbp+SESSION_STEPPING], 0
+    mov dword [rbp+SESSION_REMAINING], 0
     mov dword [rbp-36], 0         ; no pending tracee signal initially
     mov dword [rbp-272], 0        ; completed steps
     mov dword [rbp+SIGNAL_STOPS], 0 ; observed signal-delivery stops
@@ -277,7 +280,12 @@ debug_run:
     inc dword [rbp-272]
     cmp dword [rbp+SESSION_MODE], 0
     je .bounded_step_check
+    ; A counted interactive step request is completed only after a real
+    ; synthetic step trap. Keep sampling/deltas on every instruction.
+    dec dword [rbp+SESSION_REMAINING]
+    jg .step_loop
     mov dword [rbp+SESSION_STEPPING], 0
+    mov dword [rbp+SESSION_REMAINING], 0
     jmp .session_prompt
 .bounded_step_check:
     mov eax, [rbp-272]
@@ -419,6 +427,7 @@ debug_run:
     call puts
     jmp .session_prompt
 .session_step:
+    mov dword [rbp+SESSION_REMAINING], 1
     mov dword [rbp+SESSION_STEPPING], 1
     jmp .step_loop
 .session_status:
@@ -639,6 +648,7 @@ debug_run:
     ; If paused by a genuine signal-delivery stop, continue forwards
     ; the recorded pending signal rather than silently swallowing it.
     mov dword [rbp+SESSION_STEPPING], 0
+    mov dword [rbp+SESSION_REMAINING], 0
     jmp .resume
 .session_quit:
     lea rdi, [rel msg_session_quit]
@@ -679,6 +689,7 @@ debug_run:
     cmp dword [rbp+SESSION_STEPPING], 0
     je .resume                 ; continue remains noninteractive
     mov dword [rbp+SESSION_STEPPING], 0
+    mov dword [rbp+SESSION_REMAINING], 0
     lea rdi, [rel msg_pending_signal]
     mov esi, [rbp-36]
     xor eax, eax
@@ -778,6 +789,7 @@ debug_run:
     call printf
     mov dword [rbp-36], 0
     mov dword [rbp+SESSION_STEPPING], 0   ; event path resumes automatically
+    mov dword [rbp+SESSION_REMAINING], 0  ; cancel remainder at ptrace event
     jmp .resume
 
 .exited:
