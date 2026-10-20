@@ -1,11 +1,11 @@
 # Changelog
 
-## v0.2.12 — 2026-10-20 (experimental Linux x86-64 development)
+## v0.2.12 — 2026-10-20 (experimental Linux x86-64 prerelease)
 
 - Added interactive native NASM `until-signal` / `u`, a new explicit forward-resume mode using `PTRACE_CONT` that returns to the debugger prompt **at the next classified application signal-delivery stop**, preserving the new signal as pending. Ordinary `continue` remains unchanged.
 - A previously pending signal is submitted exactly once when the user resumes; repeated `u` requests can inspect consecutive signals and the eight-entry read-only `signals` ring without stepping thousands of intermediate instructions. The opt-in flag persists across ptrace exec events; an exiting tracee returns its real exit status.
 - Added `tests/fixtures/signal_burst.asm`, a native Linux x86-64 test process that raises **ten sequential SIGUSR1 signals**, handles all ten successfully and exits zero. Its test verifies the eight-slot signal ring wraps correctly, all ten stops are observed, and forwards are counted only on completed ptrace resume requests.
-- Added **14** Python-free Bash/native Assembly integration cases covering two handled signal stops, ten-stop ring wrapping, repeated history reads, SIGILL forwarding/quit, stop-to-step and stop-to-continue transitions, EOF without a newline, malformed commands, reexec and normal exit. Expected suite: **204** tests, with **204/204 verified on Ubuntu 22.04 and 24.04** at the initial feature head.
+- Added **14** Python-free Bash/native Assembly integration cases covering two handled signal stops, ten-stop ring wrapping, repeated history reads, SIGILL forwarding/quit, stop-to-step and stop-to-continue transitions, EOF without a newline, malformed commands, reexec and normal exit. **204/204 passed on both Ubuntu 22.04 and 24.04** on the final feature branch and merged `main`. The gated release workflow built and published the Linux x86-64 executable archive and SHA-256 checksum.
 - Retains Boost Software License 1.0, single launched tracee, experimental Linux x86-64 and forward-only scope. No reverse execution, attach, breakpoint engine or persisted execution trace.
 
 
