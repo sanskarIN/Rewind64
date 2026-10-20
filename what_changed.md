@@ -1,5 +1,15 @@
 # Rewind64 development progress
 
+## v0.2.10 interactive lifecycle diagnostics — 2026-10-20 (development)
+
+- Development branch: `dev/v0.2.10-lifecycle-inspection`; [PR #20](https://github.com/sanskarIN/Rewind64/pull/20). Release gate remains active.
+- Implemented native NASM read-only `events` / `e` to report the stopped tracee's PID, successful instruction step count, **validated application signal-delivery stops**, **signal-forwarding requests accepted by ptrace**, pending signal and ptrace exec/exit event totals.
+- Validated signal stops update a dedicated observed counter and last signal number/signed `si_code`. Synthetic trace traps and ptrace events do not count as signal-delivery stops. A successful resume with a nonzero signal increments the existing forwarded counter; these values need not be equal.
+- Added 13 native Bash/Assembly regression scenarios covering initial and stepped state, read-only coexistence, aliases, malformed commands, stopped SIGILL/SIGSEGV/SIGTRAP, interrupting step batches, compact mode, repeated inspections and EOF without a final newline.
+- First CI run surfaced missing newline-free exact-command support; fixed the parser and added an explicit alias EOF regression. Release after final Ubuntu 22.04/24.04 CI passes.
+- Existing experimental Linux-only, single-tracee, forward-only constraints and Boost Software License 1.0 remain unchanged. No Python used.
+
+
 ## v0.2.9 step-numbered RIP history — 2026-10-20 (experimental prerelease published)
 
 - **Published:** [v0.2.9 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.9), merged via [PR #19](https://github.com/sanskarIN/Rewind64/pull/19). All 12 feature/maintenance commits used `sanskarin@outlook.in`.
