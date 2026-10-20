@@ -72,6 +72,9 @@ extern stdout
 %define HISTORY_STEPS      (-1152)   ; 16 x qword absolute step numbers, -1152..-1025
 %define HISTORY_SKIP       (-1156)   ; entries skipped from oldest (dword)
 %define HISTORY_LIMIT      (-1160)   ; entries requested for this display (dword)
+%define OBSERVED_SIGNALS   (-1164)   ; valid signal-delivery stops, not forwards
+%define LAST_STOP_SIGNAL   (-1168)   ; last valid stop signal number
+%define LAST_STOP_CODE     (-1172)   ; signed siginfo si_code for last valid stop
 %define SIGKILL            9
 %define SIGTRAP            5
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
@@ -86,7 +89,9 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step [1..16] | history [1..16] | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step [1..16] | history [1..16] | events | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_lifecycle: db 'Lifecycle: pid=%ld steps=%u observed_signals=%u forwarded_signals=%u pending_signal=%u exec_events=%u exit_events=%u', 10, 0
+    msg_last_stop: db 'Last signal stop: signal=%u si_code=%d', 10, 0
     msg_history_entry: db 'RIP history [%u]: 0x%016lx step=%u', 10, 0
     msg_history_usage: db 'Usage: history [1..16] or h [1..16] (show latest N; default all available)', 0
     msg_step_usage: db 'Usage: step [1..16] or s [1..16] (strict decimal count; default 1)', 0
@@ -114,6 +119,8 @@ section .rodata
     cmd_quit: db 'quit', 10, 0
     cmd_help: db 'help', 10, 0
     cmd_history: db 'history', 10, 0
+    cmd_events: db 'events', 10, 0
+    cmd_short_events: db 'e', 10, 0
     cmd_short_history: db 'h', 10, 0
     cmd_short_step: db 's', 10, 0
     cmd_short_regs: db 'r', 10, 0
@@ -166,7 +173,7 @@ section .text
 ; Event payload at -664..-657 is distinct from cleanup counters and CPU state.
 ; Prompt control and memory words at -752..-677, text input at -832..-769.
 ;; RIP history ring at -1024..-897; matching step-number ring at
-; -1152..-1025. Metadata -1160..-1153 and -892..-880 is disjoint
+; -1152..-1025. Metadata -1172..-1153 and -892..-880 is disjoint
 ; from command input, register snapshots and siginfo.
 debug_run:
     push rbp
@@ -181,6 +188,9 @@ debug_run:
     mov dword [rbp+SESSION_REMAINING], 0
     mov dword [rbp+HISTORY_NEXT], 0
     mov dword [rbp+HISTORY_COUNT], 0
+    mov dword [rbp+OBSERVED_SIGNALS], 0
+    mov dword [rbp+LAST_STOP_SIGNAL], 0
+    mov dword [rbp+LAST_STOP_CODE], 0
     mov dword [rbp-36], 0         ; no pending tracee signal initially
     mov dword [rbp-272], 0        ; completed steps
     mov dword [rbp+SIGNAL_STOPS], 0 ; observed signal-delivery stops
@@ -607,6 +617,16 @@ debug_run:
     jmp .session_prompt
 .session_not_history_count:
     lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_events]
+    call strcmp
+    test eax, eax
+    jz .session_events
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_events]
+    call strcmp
+    test eax, eax
+    jz .session_events
+    lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_continue]
     call strcmp
     test eax, eax
@@ -670,6 +690,32 @@ debug_run:
     call printf
     inc dword [rbp+HISTORY_PRINT_INDEX]
     jmp .history_next
+.session_events:
+    ; Non-mutating session snapshot. The forwarded count measures only
+    ; successful nonzero-signal ptrace resume requests, not arrivals.
+    ; Stack-passed varargs must keep rsp 16-byte aligned for libc printf.
+    sub rsp, 16
+    mov eax, [rbp+EXEC_EVENTS]
+    mov [rsp], rax
+    mov eax, [rbp+EXIT_EVENTS]
+    mov [rsp+8], rax
+    lea rdi, [rel msg_lifecycle]
+    mov rsi, [rbp-16]
+    mov edx, [rbp-272]
+    mov ecx, [rbp+OBSERVED_SIGNALS]
+    mov r8d, [rbp+SIGNAL_STOPS]
+    mov r9d, [rbp-36]
+    xor eax, eax
+    call printf
+    add rsp, 16
+    cmp dword [rbp+OBSERVED_SIGNALS], 0
+    je .session_prompt
+    lea rdi, [rel msg_last_stop]
+    mov esi, [rbp+LAST_STOP_SIGNAL]
+    mov edx, [rbp+LAST_STOP_CODE]
+    xor eax, eax
+    call printf
+    jmp .session_prompt
 .session_step:
     mov dword [rbp+SESSION_REMAINING], 1
     mov dword [rbp+SESSION_STEPPING], 1
@@ -974,6 +1020,11 @@ debug_run:
     je .group_stop
     jmp .siginfo_failed
 .valid_signal_stop:
+    inc dword [rbp+OBSERVED_SIGNALS]
+    mov eax, [rbp-36]
+    mov [rbp+LAST_STOP_SIGNAL], eax
+    mov eax, [rbp+SIGINFO+8]
+    mov [rbp+LAST_STOP_CODE], eax
     call .report_signal_stop
     cmp dword [rbp+SESSION_MODE], 0
     je .resume
