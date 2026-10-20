@@ -61,6 +61,8 @@ extern stdout
 %define SESSION_BUF_SIZE    64
 %define SESSION_REMAINING  (-840)       ; dword batch steps left, outside input buffer
 %define SESSION_MAX_STEPS  16         ; bounded operator-requested batch
+%define BYTE_LIMIT         (-844)     ; instruction-byte count 1..8
+%define BYTE_INDEX         (-848)     ; byte offset within inspected word
 %define SIGKILL            9
 %define SIGTRAP            5
 %define TRAP_TRACE         2              ; siginfo_t.si_code for single-step
@@ -75,8 +77,10 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step [1..16] | regs | status | code | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step [1..16] | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
     msg_step_usage: db 'Usage: step [1..16] or s [1..16] (strict decimal count; default 1)', 0
+    msg_byte_usage: db 'Usage: bytes [1..8] or b [1..8] (read-only RIP bytes; default 8)', 0
+    msg_instruction_byte: db 'Instruction byte [+%u] at 0x%016lx: 0x%02x', 10, 0
     msg_memory_word: db 'Memory word at 0x%016lx: 0x%016lx', 10, 0
     msg_memory_usage: db 'Usage: mem 0xHEX [1..4] or m 0xHEX [1..4] (1..16 hex digits; 8 bytes per word)', 0
     err_memory_wrap: db 'Error: memory range wraps the 64-bit address space.', 0
@@ -93,6 +97,7 @@ section .rodata
     cmd_regs: db 'regs', 10, 0
     cmd_status: db 'status', 10, 0
     cmd_code: db 'code', 10, 0
+    cmd_bytes: db 'bytes', 10, 0
     cmd_stack: db 'stack', 10, 0
     cmd_continue: db 'continue', 10, 0
     cmd_quit: db 'quit', 10, 0
@@ -101,6 +106,7 @@ section .rodata
     cmd_short_regs: db 'r', 10, 0
     cmd_short_status: db 'i', 10, 0
     cmd_short_code: db 'x', 10, 0
+    cmd_short_bytes: db 'b', 10, 0
     cmd_short_stack: db 'k', 10, 0
     cmd_short_continue: db 'c', 10, 0
     cmd_short_quit: db 'q', 10, 0
@@ -125,6 +131,7 @@ section .rodata
     err_regs:      db 'ptrace(GETREGS)', 0
     err_siginfo:   db 'ptrace(GETSIGINFO)', 0
     err_code_read: db 'ptrace(PEEKTEXT at RIP)', 0
+    err_byte_read: db 'ptrace(PEEKTEXT bytes at RIP)', 0
     err_stack_read: db 'ptrace(PEEKDATA at RSP)', 0
     err_memory_read: db 'ptrace(PEEKDATA at address)', 0
     err_eventmsg:  db 'ptrace(GETEVENTMSG)', 0
@@ -429,6 +436,59 @@ debug_run:
     test eax, eax
     jz .session_code
     lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_bytes]
+    call strcmp
+    test eax, eax
+    jz .session_bytes_default
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_bytes]
+    call strcmp
+    test eax, eax
+    jz .session_bytes_default
+    ; Recognize exactly "bytes N" or "b N"; reject malformed numeric
+    ; suffixes without calling ptrace or resuming the launched tracee.
+    lea rsi, [rbp+SESSION_BUFFER]
+    cmp byte [rsi], 'b'
+    jne .session_not_bytes
+    cmp byte [rsi+1], ' '
+    je .session_short_bytes_count
+    cmp byte [rsi+1], 'y'
+    jne .session_not_bytes
+    cmp byte [rsi+2], 't'
+    jne .session_not_bytes
+    cmp byte [rsi+3], 'e'
+    jne .session_not_bytes
+    cmp byte [rsi+4], 's'
+    jne .session_not_bytes
+    cmp byte [rsi+5], ' '
+    jne .session_not_bytes
+    add rsi, 6
+    jmp .session_bytes_count
+.session_short_bytes_count:
+    add rsi, 2
+.session_bytes_count:
+    movzx eax, byte [rsi]
+    cmp al, '1'
+    jb .session_bytes_usage
+    cmp al, '8'
+    ja .session_bytes_usage
+    sub eax, '0'
+    mov dword [rbp+BYTE_LIMIT], eax
+    inc rsi
+    cmp byte [rsi], 10
+    je .session_bytes
+    cmp byte [rsi], 0
+    je .session_bytes
+    jmp .session_bytes_usage
+.session_bytes_default:
+    mov dword [rbp+BYTE_LIMIT], 8
+    jmp .session_bytes
+.session_bytes_usage:
+    lea rdi, [rel msg_byte_usage]
+    call puts
+    jmp .session_prompt
+.session_not_bytes:
+    lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_stack]
     call strcmp
     test eax, eax
@@ -534,6 +594,53 @@ debug_run:
     jmp .session_prompt
 .session_code_failed:
     lea rdi, [rel err_code_read]
+    call perror
+    jmp .session_prompt
+.session_bytes:
+    ; A read-only view of 1..8 bytes at the stopped RIP, in execution
+    ; address order (little-endian x86-64). This is NOT disassembly.
+    ; One PEEKTEXT word is enough for the bounded eight-byte window.
+    call .get_regs
+    cmp rax, -1
+    je .regs_failed
+    call __errno_location
+    mov dword [rax], 0
+    mov edi, PTRACE_PEEKTEXT
+    mov rsi, [rbp-16]
+    mov rdx, [rbp+REG_RIP]
+    xor ecx, ecx
+    xor eax, eax
+    call ptrace
+    mov [rbp+CODE_WORD], rax
+    cmp rax, -1
+    jne .session_bytes_ready
+    call __errno_location
+    cmp dword [rax], 0
+    jne .session_bytes_failed
+.session_bytes_ready:
+    mov dword [rbp+BYTE_INDEX], 0
+.session_bytes_next:
+    ; Rip + offset is a freshly observed tracee address; no target
+    ; memory is modified, and no instruction is executed by this command.
+    lea rdi, [rel msg_instruction_byte]
+    mov esi, [rbp+BYTE_INDEX]
+    mov rdx, [rbp+REG_RIP]
+    add rdx, rsi
+    mov rax, [rbp+CODE_WORD]
+    mov ecx, [rbp+BYTE_INDEX]
+    shl ecx, 3
+    shr rax, cl
+    and eax, 0xff
+    mov ecx, eax
+    xor eax, eax
+    call printf
+    inc dword [rbp+BYTE_INDEX]
+    mov eax, [rbp+BYTE_INDEX]
+    cmp eax, [rbp+BYTE_LIMIT]
+    jl .session_bytes_next
+    jmp .session_prompt
+.session_bytes_failed:
+    lea rdi, [rel err_byte_read]
     call perror
     jmp .session_prompt
 .session_stack:

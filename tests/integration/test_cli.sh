@@ -65,7 +65,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.6-pre'; }
+version() { assert_contains version 'v0.2.7-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -667,6 +667,72 @@ session_stack_with_code() {
   assert_contains session_stack_with_code 'Interactive steps completed: 1' &&
   assert_not_running session_stack_with_code
 }
+# v0.2.7: bounded read-only RIP bytes in ascending address order.
+instruction_bytes_default() {
+  assert_count instruction_bytes_default 'Instruction byte [' 8 &&
+  assert_count instruction_bytes_default ': 0x90' 8 &&
+  assert_count instruction_bytes_default 'Code word at RIP=' 0 &&
+  assert_contains instruction_bytes_default 'steps=0 pending_signal=0' &&
+  assert_not_running instruction_bytes_default
+}
+instruction_bytes_alias() {
+  assert_count instruction_bytes_alias 'Instruction byte [' 8 &&
+  assert_count instruction_bytes_alias ': 0x90' 8 &&
+  assert_not_running instruction_bytes_alias
+}
+instruction_bytes_one() {
+  assert_count instruction_bytes_one 'Instruction byte [' 1 &&
+  assert_contains instruction_bytes_one 'Instruction byte [+0]' &&
+  assert_count instruction_bytes_one ': 0x90' 1 &&
+  assert_not_running instruction_bytes_one
+}
+instruction_bytes_four() {
+  assert_count instruction_bytes_four 'Instruction byte [' 4 &&
+  assert_count instruction_bytes_four ': 0x90' 4 &&
+  assert_not_running instruction_bytes_four
+}
+instruction_bytes_mixed() {
+  assert_count instruction_bytes_mixed 'Instruction byte [' 10 &&
+  assert_count instruction_bytes_mixed 'Code word at RIP=' 1 &&
+  assert_contains instruction_bytes_mixed 'steps=2 pending_signal=0' &&
+  assert_not_running instruction_bytes_mixed
+}
+instruction_bytes_allones() {
+  assert_count instruction_bytes_allones 'Instruction byte [' 8 &&
+  assert_count instruction_bytes_allones ': 0xff' 8 &&
+  assert_not_running instruction_bytes_allones
+}
+instruction_bytes_invalid() {
+  assert_count instruction_bytes_invalid 'Usage: bytes [1..8]' 13 &&
+  assert_count instruction_bytes_invalid 'Instruction byte [' 0 &&
+  assert_contains instruction_bytes_invalid 'steps=0 pending_signal=0' &&
+  assert_not_running instruction_bytes_invalid
+}
+instruction_bytes_signal() {
+  assert_contains instruction_bytes_signal 'Interactive signal stop: signal 4 pending' &&
+  assert_count instruction_bytes_signal 'Instruction byte [' 2 &&
+  assert_contains instruction_bytes_signal ': 0x0f' &&
+  assert_contains instruction_bytes_signal ': 0x0b' &&
+  assert_contains instruction_bytes_signal 'steps=0 pending_signal=4' &&
+  assert_contains instruction_bytes_signal 'Signals forwarded: 0' &&
+  assert_not_running instruction_bytes_signal
+}
+instruction_bytes_compact() {
+  assert_count instruction_bytes_compact 'Instruction byte [' 8 &&
+  assert_count instruction_bytes_compact '    GPR:' 0 &&
+  assert_contains instruction_bytes_compact 'steps=1 pending_signal=0' &&
+  assert_not_running instruction_bytes_compact
+}
+instruction_bytes_eof() {
+  assert_count instruction_bytes_eof 'Instruction byte [' 2 &&
+  assert_contains instruction_bytes_eof 'Interactive session ended;' &&
+  assert_not_running instruction_bytes_eof
+}
+instruction_bytes_unknown() {
+  assert_contains instruction_bytes_unknown 'Unknown session command. Type help.' &&
+  assert_count instruction_bytes_unknown 'Instruction byte [' 0 &&
+  assert_not_running instruction_bytes_unknown
+}
 session_code() {
   assert_contains session_code 'Code word at RIP=0x' &&
   assert_contains session_code 'Target exited with status 42' &&
@@ -763,6 +829,20 @@ printf 'step 16\n' > "$tmp/batch-step-early-exit"
 printf 'step\ns 0\nstatus\nquit\n' > "$tmp/batch-step-invalid-signal"
 printf 'step 3' > "$tmp/batch-step-no-newline"
 
+# v0.2.7: instruction bytes are displayed in ascending address order,
+# unlike a 64-bit machine word printed as a hexadecimal integer.
+printf 'bytes\nstatus\nquit\n' > "$tmp/instruction-bytes-default"
+printf 'b\nquit\n' > "$tmp/instruction-bytes-alias"
+printf 'bytes 1\nquit\n' > "$tmp/instruction-bytes-one"
+printf 'b 4\nquit\n' > "$tmp/instruction-bytes-four"
+printf 'bytes 8\nstep 2\nb 2\ncode\nstatus\nquit\n' > "$tmp/instruction-bytes-mixed"
+printf 'bytes\nquit\n' > "$tmp/instruction-bytes-allones"
+printf 'bytes 0\nbytes 9\nbytes 10\nbytes 01\nbytes -1\nbytes 1 \nbytes 1x\nb \nb 0\nb 8 \nb 4x\nbytes 1 2\nb +1\nstatus\nquit\n' > "$tmp/instruction-bytes-invalid"
+printf 'step\nbytes 2\nstatus\nquit\n' > "$tmp/instruction-bytes-signal"
+printf 'step\nb 8\nstatus\nquit\n' > "$tmp/instruction-bytes-compact"
+printf 'bytes 2' > "$tmp/instruction-bytes-eof"
+printf 'byte\nquit\n' > "$tmp/instruction-bytes-unknown"
+
 # Resolve addresses from symbols in the native ELF fixtures rather than
 # assuming fixed link addresses; no Python or hardcoded ASLR assumptions.
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
@@ -840,6 +920,17 @@ check session_stack_invalid 0 session_exec "$tmp/session-stack-invalid" "$BIN" r
 check session_stack_signal 0 session_exec "$tmp/session-stack-signal" "$BIN" run --interactive "$ROOT/build/illegal"
 check session_stack_repeat 0 session_exec "$tmp/session-stack-repeat" "$BIN" run --interactive "$ROOT/build/exit0"
 check session_stack_with_code 0 session_exec "$tmp/session-stack-with-code" "$BIN" run --interactive "$ROOT/build/stack_words"
+check instruction_bytes_default 0 session_exec "$tmp/instruction-bytes-default" "$BIN" run --interactive "$ROOT/build/long_steps"
+check instruction_bytes_alias 0 session_exec "$tmp/instruction-bytes-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
+check instruction_bytes_one 0 session_exec "$tmp/instruction-bytes-one" "$BIN" run --interactive "$ROOT/build/long_steps"
+check instruction_bytes_four 0 session_exec "$tmp/instruction-bytes-four" "$BIN" run --interactive "$ROOT/build/long_steps"
+check instruction_bytes_mixed 0 session_exec "$tmp/instruction-bytes-mixed" "$BIN" run --interactive "$ROOT/build/long_steps"
+check instruction_bytes_allones 0 session_exec "$tmp/instruction-bytes-allones" "$BIN" run --interactive "$ROOT/build/all_ones"
+check instruction_bytes_invalid 0 session_exec "$tmp/instruction-bytes-invalid" "$BIN" run --interactive "$ROOT/build/long_steps"
+check instruction_bytes_signal 0 session_exec "$tmp/instruction-bytes-signal" "$BIN" run --interactive "$ROOT/build/illegal"
+check instruction_bytes_compact 0 session_exec "$tmp/instruction-bytes-compact" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
+check instruction_bytes_eof 0 session_exec "$tmp/instruction-bytes-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
+check instruction_bytes_unknown 0 session_exec "$tmp/instruction-bytes-unknown" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"
