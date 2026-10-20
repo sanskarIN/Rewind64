@@ -1,12 +1,12 @@
 # Changelog
 
-## v0.2.8 — 2026-10-20 (experimental Linux x86-64 development)
+## v0.2.8 — 2026-10-20 (experimental Linux x86-64 prerelease)
 
 - Added native NASM interactive `history` / `h` to show up to **16** recent RIP observations in chronological order. The stored samples are the initial exec-time instruction pointer and every confirmed single-step completion, including individual steps within batches.
 - A bounded 128-byte debugger-owned circular buffer overwrites the oldest sample when full, without allocation, filesystem output or target state modification. A fixed local ring index and count preserve chronological presentation across repeated wraparound.
 - Genuine signal stops, invalid step requests, read-only `code`/`bytes` inspection and repeated history requests do not generate entries; the command never resumes the tracee.
 - Added 10 Python-free native Assembly/Bash regression cases for initial RIP, aliases, repeated history, ring wrap and double wrap, SIGILL stops, rejected stepping, code/byte coexistence, compact display and unknown commands.
-- Early Linux CI verified **152/152** tests on both Ubuntu 22.04 and Ubuntu 24.04. Final release validation remains required.
+- **152/152 native tests passed** on both Ubuntu 22.04 and Ubuntu 24.04 on the release-ready pull request and merged main. The release workflow built and published the Linux x86-64 executable archive and SHA-256 checksum.
 - This feature provides only sampled RIP addresses, **not historical CPU/register/memory state, reverse stepping, trace recording, or replay**. License remains Boost Software License 1.0.
 
 
