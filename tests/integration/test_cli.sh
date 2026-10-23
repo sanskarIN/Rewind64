@@ -1279,6 +1279,24 @@ eof_pending_inspect() {
   assert_not_running eof_pending_inspect
 }
 eof_near_miss() { assert_count eof_near_miss 'Unknown session command. Type help.' 1 && assert_count eof_near_miss 'After step:' 0 && assert_not_running eof_near_miss; }
+eof_short_boundary() {
+  assert_count eof_short_boundary 'Unknown session command. Type help.' 1 &&
+  assert_count eof_short_boundary 'session command too long' 0 &&
+  assert_count eof_short_boundary 'After step:' 0 &&
+  assert_not_running eof_short_boundary
+}
+eof_full_boundary() {
+  assert_count eof_full_boundary 'session command too long' 1 &&
+  assert_count eof_full_boundary 'Unknown session command.' 0 &&
+  assert_count eof_full_boundary 'After step:' 0 &&
+  assert_not_running eof_full_boundary
+}
+eof_extra_space() {
+  assert_count eof_extra_space 'Unknown session command. Type help.' 1 &&
+  assert_count eof_extra_space 'Target exited with status 7' 0 &&
+  assert_not_running eof_extra_space
+}
+
 
 session_code() {
   assert_contains session_code 'Code word at RIP=0x' &&
@@ -1509,6 +1527,10 @@ printf 'continue' > "$tmp/eof-continue"
 printf 'step' > "$tmp/eof-step"
 printf 'step\nstatus' > "$tmp/eof-pending-inspect"
 printf 'stepper' > "$tmp/eof-near-miss"
+printf '%062d' 0 > "$tmp/eof-short-boundary"
+printf '%063d' 0 > "$tmp/eof-full-boundary"
+printf 'continue ' > "$tmp/eof-extra-space"
+
 
 # Resolve addresses from symbols in the native ELF fixtures.
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
@@ -1705,6 +1727,9 @@ check eof_continue 7 session_exec "$tmp/eof-continue" "$BIN" run --interactive "
 check eof_step 0 session_exec "$tmp/eof-step" "$BIN" run --interactive "$ROOT/build/long_steps"
 check eof_pending_inspect 0 session_exec "$tmp/eof-pending-inspect" "$BIN" run --interactive "$ROOT/build/illegal"
 check eof_near_miss 0 session_exec "$tmp/eof-near-miss" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_short_boundary 0 session_exec "$tmp/eof-short-boundary" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_full_boundary 0 session_exec "$tmp/eof-full-boundary" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_extra_space 0 session_exec "$tmp/eof-extra-space" "$BIN" run --interactive "$ROOT/build/exit7"
 check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"
