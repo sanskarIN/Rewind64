@@ -1,19 +1,19 @@
 # Changelog
 
-## v0.2.14 — in development (experimental Linux x86-64)
+## v0.2.14 — 2026-10-23 (experimental Linux x86-64 prerelease)
 
 - Added target-free `rewind64 --capabilities` to print a **single static JSON document** for IDE/automation integrations, with schema version 1, Linux ptrace backend, supported execution modes, command limits and explicit unsupported-feature flags. It does not launch, attach, trace or inspect a program.
 - Rejects any arguments after `--capabilities` with exit code 2; `--help` advertises the new operation. Development CLI version is `v0.2.14-pre`.
 - Added machine-readable contract documentation and **5** CLI integration cases for JSON content, repeated invocation, invalid arguments and help discovery. Optional `jq` validation runs when available without introducing a required dependency.
-- Expected combined suite **222** Python-free Bash/native NASM cases, pending Ubuntu 22.04/24.04 CI. Stacked on pending v0.2.13 PR; this is **not a published release**.
+- **222/222 tests passed** on Ubuntu 22.04 and 24.04 at PR head and merged main. [PR #24](https://github.com/sanskarIN/Rewind64/pull/24) merged; the [experimental v0.2.14 release](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.14) was published with a Linux x86-64 executable archive and SHA-256 checksums, after the [gated publishing workflow](https://github.com/sanskarIN/Rewind64/actions/runs/39915509678) passed.
 - Scope remains forward-only Linux x86-64, single self-launched tracee, Boost Software License 1.0, no record/replay, historical state restoration, process attachment or stable release.
 
-## v0.2.13 — in development (experimental Linux x86-64)
+## v0.2.13 — 2026-10-23 (experimental Linux x86-64 prerelease)
 
 - Added strict optional `signals [N]` / `g [N]` to show only the latest 1–8 validated signal-delivery records, defaulting to the entire retained history. Counts above currently available entries are clamped.
 - Filtered output preserves original retained-history indices, including after the eight-slot ring wraps. A 1344-byte aligned stack frame is unchanged; two disjoint dword slots hold the display limit and skip offset.
 - Malformed counts (zero, >8, leading zeros, signs, extra whitespace/arguments) display a usage diagnostic without resuming the tracee or forwarding its pending signal. Accept counted commands at EOF without a terminating newline.
-- Adds **13** Bash/native NASM regression cases, targeting **217** total, covering empty history, pending faults, ten valid signal stops, wrapped histories, aliases, read-only repeated inspection, compact output, and invalid count handling. CI validation and release publishing are pending.
+- Added **13** Bash/native NASM regression cases for empty history, pending faults, ten valid signal stops, wrapped histories, aliases, read-only repeated inspection, compact output, and invalid count handling. **217/217 tests passed** on Ubuntu 22.04 and 24.04. [PR #23](https://github.com/sanskarIN/Rewind64/pull/23) merged and the [experimental v0.2.13 release](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.13) was published after the [guarded release workflow](https://github.com/sanskarIN/Rewind64/actions/runs/39910666671) passed.
 - Experimental single launched Linux x86-64 tracee only; no persistent recording, historical restoration or reverse execution. No Python used.
 
 ## v0.2.12 — 2026-10-20 (experimental Linux x86-64 prerelease)
