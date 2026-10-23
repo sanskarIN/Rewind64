@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.13 — in development (experimental Linux x86-64)
+
+- Added strict optional `signals [N]` / `g [N]` to show only the latest 1–8 validated signal-delivery records, defaulting to the entire retained history. Counts above currently available entries are clamped.
+- Filtered output preserves original retained-history indices, including after the eight-slot ring wraps. A 1344-byte aligned stack frame is unchanged; two disjoint dword slots hold the display limit and skip offset.
+- Malformed counts (zero, >8, leading zeros, signs, extra whitespace/arguments) display a usage diagnostic without resuming the tracee or forwarding its pending signal. Accept counted commands at EOF without a terminating newline.
+- Adds **13** Bash/native NASM regression cases, targeting **217** total, covering empty history, pending faults, ten valid signal stops, wrapped histories, aliases, read-only repeated inspection, compact output, and invalid count handling. CI validation and release publishing are pending.
+- Experimental single launched Linux x86-64 tracee only; no persistent recording, historical restoration or reverse execution. No Python used.
+
 ## v0.2.12 — 2026-10-20 (experimental Linux x86-64 prerelease)
 
 - Added interactive native NASM `until-signal` / `u`, a new explicit forward-resume mode using `PTRACE_CONT` that returns to the debugger prompt **at the next classified application signal-delivery stop**, preserving the new signal as pending. Ordinary `continue` remains unchanged.
