@@ -1,10 +1,18 @@
 # Changelog
 
-## v0.2.15 — in development (experimental Linux x86-64)
+## v0.2.16 — in development (experimental Linux x86-64)
+
+- Introduced native NASM interactive `until-exec` / `v`, an explicit `PTRACE_CONT` mode that pauses at the **next verified `PTRACE_EVENT_EXEC`** with a fresh register snapshot. Until that event, validated application signal stops are forwarded normally; synthetic ptrace stops do not become user signals.
+- On the requested exec pause, resets debugger-owned RIP history for the replaced executable and records the new RIP labeled with the cumulative verified step count; refreshes the previous-register baseline before any subsequent step. Existing `continue`, `until-signal`, bounded stepping, signal history and automatic observation are preserved.
+- Uses the last disjoint dword in the existing 1344-byte stack frame for the opt-in exec mode, no heap, no trace recording or replay. Exposes `execution.stop_on_exec: true` in the static schema-v1 capabilities JSON.
+- Adds **14** Python-free native NASM/Bash integration checks covering exec and no-exec paths, real signal forwarding, post-exec stepping, history rebasing, EOF cleanup, strict command matching, aliases and concise output. Expected suite: **257 tests**, pending Ubuntu 22.04/24.04 CI and gated prerelease publication.
+- Experimental Linux x86-64 only, single self-launched tracee, Boost Software License 1.0, no attachment, multi-thread tracing, reverse execution or stable release.
+
+## v0.2.15 — 2026-10-23 (experimental Linux x86-64 prerelease)
 
 - Normalize a short, final EOF-terminated interactive command in the existing 64-byte NASM input buffer by inserting LF+NUL before exact-string dispatch. Newline-terminated commands are unchanged, and the overlong input guard still rejects and drains an unbounded line.
 - Exact no-newline commands now behave the same as newline-terminated `regs`, `status`, `code`, `stack`, `bytes`, `history`, `help`, `quit`, `step`, `continue` and short aliases. A genuinely empty EOF still terminates and reaps the target. Inspection never forwards pending signals.
-- Added **21** Python-free Bash/native NASM regressions for EOF commands, aliases, stopped SIGILL, normal continuation, valid step completion and near-miss rejection; expected suite **243** (222 existing + 21). CI validation pending.
+- Added **21** Python-free Bash/native NASM regressions for EOF commands, aliases, stopped SIGILL, normal continuation, valid step completion and near-miss rejection; **243/243 tests passed** on Ubuntu 22.04 and 24.04. [PR #27](https://github.com/sanskarIN/Rewind64/pull/27) merged and the [v0.2.15 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.15) was published after both verification jobs and the packaging workflow passed.
 - The experimental prerelease publishing workflow now independently gates on **Ubuntu 22.04 and 24.04** native integration tests, with the publication job depending on both; packaging itself reruns the native suite.
 - Linux x86-64 single self-launched tracee, Boost Software License 1.0, forward-only. No Python, reverse debugger, tracing recording, replay or stable release claimed.
 
