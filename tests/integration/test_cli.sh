@@ -5,7 +5,7 @@ set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 BIN="$ROOT/build/rewind64"
-EXPECTED_VERSION="0.2.16-pre" # canonical expected version for CLI and JSON test checks
+EXPECTED_VERSION="0.2.17-pre" # canonical expected version for CLI and JSON test checks
 tmp="$(mktemp -d)"
 trap 'rm -rf -- "$tmp"' EXIT
 
@@ -78,6 +78,8 @@ capabilities_json() {
   assert_contains capabilities_json '"max_cli_steps": 64' &&
   assert_contains capabilities_json '"max_interactive_step_batch": 16' &&
   assert_contains capabilities_json '"stop_on_exec": true' &&
+  assert_contains capabilities_json '"rip_watch": true' &&
+  assert_contains capabilities_json '"rip_watch_max_steps": 64' &&
   assert_contains capabilities_json '"signal_history_tail": true' &&
   assert_contains capabilities_json '"signal_history_max": 8' &&
   assert_contains capabilities_json '"memory_words_max": 4' &&
@@ -96,6 +98,8 @@ capabilities_json() {
         .execution.max_cli_steps == 64 and
         .execution.max_interactive_step_batch == 16 and
         .execution.stop_on_exec == true and
+        .execution.rip_watch == true and
+        .execution.rip_watch_max_steps == 64 and
         .inspection.signal_history_tail == true and
         .limitations.forward_only == true and
         .limitations.recording == false and
@@ -1089,6 +1093,111 @@ signal_history_forward() {
   assert_contains signal_history_forward 'Target terminated by signal 4'
 }
 # v0.2.12: resume to the next genuine signal without consuming it.
+# v0.2.17: bounded address stops without patching executable memory.
+rip_watch_initial() {
+  assert_contains rip_watch_initial 'RIP watch reached 0x' &&
+  assert_contains rip_watch_initial 'after 0 confirmed steps.' &&
+  assert_count rip_watch_initial 'RIP watch stop:' 1 &&
+  assert_count rip_watch_initial 'After step:' 0 &&
+  assert_contains rip_watch_initial 'steps=0 pending_signal=0' &&
+  assert_contains rip_watch_initial 'Signals forwarded: 0' &&
+  assert_not_running rip_watch_initial
+}
+rip_watch_three() {
+  assert_contains rip_watch_three 'after 3 confirmed steps.' &&
+  assert_count rip_watch_three 'RIP watch stop:' 1 &&
+  assert_contains rip_watch_three 'RIP history [3]:' &&
+  assert_contains rip_watch_three 'step=3' &&
+  assert_contains rip_watch_three 'Interactive steps completed: 3' &&
+  assert_not_running rip_watch_three
+}
+rip_watch_one_after_two() {
+  assert_contains rip_watch_one_after_two 'after 1 confirmed steps.' &&
+  assert_contains rip_watch_one_after_two 'Interactive steps completed: 3' &&
+  assert_not_running rip_watch_one_after_two
+}
+rip_watch_sixtyfour() {
+  assert_contains rip_watch_sixtyfour 'after 64 confirmed steps.' &&
+  assert_count rip_watch_sixtyfour 'RIP watch stop:' 1 &&
+  assert_contains rip_watch_sixtyfour 'Interactive steps completed: 64' &&
+  assert_not_running rip_watch_sixtyfour
+}
+rip_watch_exhausted() {
+  assert_contains rip_watch_exhausted 'not reached within 64 confirmed steps.' &&
+  assert_count rip_watch_exhausted 'RIP watch reached' 0 &&
+  assert_contains rip_watch_exhausted 'steps=64 pending_signal=0' &&
+  assert_contains rip_watch_exhausted 'Interactive steps completed: 64' &&
+  assert_not_running rip_watch_exhausted
+}
+rip_watch_uppercase() {
+  assert_contains rip_watch_uppercase 'after 3 confirmed steps.' &&
+  assert_count rip_watch_uppercase 'RIP watch stop:' 1 &&
+  assert_not_running rip_watch_uppercase
+}
+rip_watch_high_address() {
+  assert_contains rip_watch_high_address 'not reached within 64 confirmed steps.' &&
+  assert_not_running rip_watch_high_address
+}
+rip_watch_repeated() {
+  assert_count rip_watch_repeated 'RIP watch reached' 2 &&
+  assert_contains rip_watch_repeated 'after 3 confirmed steps.' &&
+  assert_contains rip_watch_repeated 'after 0 confirmed steps.' &&
+  assert_contains rip_watch_repeated 'Interactive steps completed: 3' &&
+  assert_not_running rip_watch_repeated
+}
+rip_watch_invalid() {
+  assert_count rip_watch_invalid 'Usage: until-rip 0xHEX' 12 &&
+  assert_count rip_watch_invalid 'RIP watch reached' 0 &&
+  assert_contains rip_watch_invalid 'steps=0 pending_signal=0' &&
+  assert_not_running rip_watch_invalid
+}
+rip_watch_unknown() {
+  assert_count rip_watch_unknown 'Unknown session command. Type help.' 3 &&
+  assert_contains rip_watch_unknown 'steps=0 pending_signal=0' &&
+  assert_not_running rip_watch_unknown
+}
+rip_watch_pending() {
+  assert_contains rip_watch_pending 'Interactive signal stop: signal 4 pending' &&
+  assert_contains rip_watch_pending 'steps=0 pending_signal=4' &&
+  assert_contains rip_watch_pending 'Signals forwarded: 0' &&
+  assert_not_running rip_watch_pending
+}
+rip_watch_trap() {
+  assert_contains rip_watch_trap 'Interactive signal stop: signal 5 pending' &&
+  assert_contains rip_watch_trap 'Signals forwarded: 0' &&
+  assert_not_running rip_watch_trap
+}
+rip_watch_early_exit() {
+  assert_contains rip_watch_early_exit 'Target exited with status 42' &&
+  assert_count rip_watch_early_exit 'RIP watch reached' 0 &&
+  assert_contains rip_watch_early_exit 'Signals forwarded: 0'
+}
+rip_watch_exec_cancel() {
+  assert_contains rip_watch_exec_cancel 'RIP watch canceled: tracee executed a new program image.' &&
+  assert_contains rip_watch_exec_cancel 'exec_events=1 exit_events=0' &&
+  assert_contains rip_watch_exec_cancel 'RIP history [0]:' &&
+  assert_contains rip_watch_exec_cancel 'steps=0 pending_signal=0' &&
+  assert_not_running rip_watch_exec_cancel
+}
+rip_watch_compact() {
+  assert_count rip_watch_compact '    GPR:' 0 &&
+  assert_contains rip_watch_compact 'after 3 confirmed steps.' &&
+  assert_count rip_watch_compact 'RIP watch stop:' 1 &&
+  assert_not_running rip_watch_compact
+}
+rip_watch_eof() {
+  assert_contains rip_watch_eof 'after 3 confirmed steps.' &&
+  assert_contains rip_watch_eof 'Interactive session ended;' &&
+  assert_not_running rip_watch_eof
+}
+rip_watch_invalid_pending() {
+  assert_contains rip_watch_invalid_pending 'Interactive signal stop: signal 4 pending' &&
+  assert_count rip_watch_invalid_pending 'Usage: until-rip 0xHEX' 1 &&
+  assert_contains rip_watch_invalid_pending 'steps=0 pending_signal=4' &&
+  assert_contains rip_watch_invalid_pending 'Signals forwarded: 0' &&
+  assert_not_running rip_watch_invalid_pending
+}
+
 # v0.2.16: explicit pause on a genuine ptrace exec event.
 until_exec_basic() {
   assert_count until_exec_basic 'Ptrace exec event:' 1 &&
@@ -1705,6 +1814,29 @@ printf '%063dcontinue\nstatus\nquit\n' 0 > "$tmp/session-overlong"
 printf '%064d' 0 > "$tmp/session-overlong-eof"
 printf '%062d\nquit\n' 0 > "$tmp/session-max-line"
 
+# v0.2.17: symbol-grounded, bounded, non-invasive instruction-address watches.
+printf -v watch_three '%016x' "$((16#$history_entry + 3))"
+printf -v watch_sixtyfour '%016x' "$((16#$history_entry + 64))"
+printf -v watch_sixtyfive '%016x' "$((16#$history_entry + 65))"
+watch_upper="$(printf '%s' "$watch_three" | tr 'abcdef' 'ABCDEF')"
+printf 'until-rip 0x%s\nstatus\nquit\n' "$history_entry" > "$tmp/rip-watch-initial"
+printf 'until-rip 0x%s\nhistory 4\nquit\n' "$watch_three" > "$tmp/rip-watch-three"
+printf 'step 2\nuntil-rip 0x%s\nquit\n' "$watch_three" > "$tmp/rip-watch-one-after-two"
+printf 'until-rip 0x%s\nquit\n' "$watch_sixtyfour" > "$tmp/rip-watch-sixtyfour"
+printf 'until-rip 0x%s\nstatus\nquit\n' "$watch_sixtyfive" > "$tmp/rip-watch-exhausted"
+printf 'until-rip 0X%s\nquit\n' "$watch_upper" > "$tmp/rip-watch-uppercase"
+printf 'until-rip 0xffffffffffffffff\nquit\n' > "$tmp/rip-watch-high-address"
+printf 'until-rip 0x%s\nuntil-rip 0x%s\nquit\n' "$watch_three" "$watch_three" > "$tmp/rip-watch-repeated"
+printf 'until-rip 0x\nuntil-rip 0\nuntil-rip 0xG\nuntil-rip 0x-1\nuntil-rip 0x1x\nuntil-rip 0x1 \nuntil-rip 0x12345678901234567\nuntil-rip 0x 1\nuntil-rip 0x+1\nuntil-rip 0x1 2\nuntil-rip 0x1\t\nuntil-rip 0x1\r\nstatus\nquit\n' > "$tmp/rip-watch-invalid"
+printf 'until-rip\nUNTIL-RIP 0x1\nuntil-ripx 0x1\nstatus\nquit\n' > "$tmp/rip-watch-unknown"
+printf 'until-rip 0x0\nstatus\nquit\n' > "$tmp/rip-watch-pending"
+printf 'until-rip 0x0\nevents\nquit\n' > "$tmp/rip-watch-trap"
+printf 'until-rip 0x0\n' > "$tmp/rip-watch-early-exit"
+printf 'until-rip 0x0\nevents\nhistory\nstatus\nquit\n' > "$tmp/rip-watch-exec-cancel"
+printf 'until-rip 0x%s\nquit\n' "$watch_three" > "$tmp/rip-watch-compact"
+printf 'until-rip 0x%s' "$watch_three" > "$tmp/rip-watch-eof"
+printf 'step\nuntil-rip 0xz\nstatus\nquit\n' > "$tmp/rip-watch-invalid-pending"
+
 check help 0 "$BIN" --help
 check version 0 "$BIN" --version
 check capabilities_json 0 "$BIN" --capabilities
@@ -1712,6 +1844,23 @@ check capabilities_repeat 0 "$BIN" --capabilities
 check capabilities_invalid 2 "$BIN" --capabilities unexpected
 check capabilities_invalid 2 "$BIN" --capabilities --
 check capabilities_help 0 "$BIN" --help
+check rip_watch_initial 0 session_exec "$tmp/rip-watch-initial" "$BIN" run --interactive "$ROOT/build/long_steps"
+check rip_watch_three 0 session_exec "$tmp/rip-watch-three" "$BIN" run --interactive "$ROOT/build/long_steps"
+check rip_watch_one_after_two 0 session_exec "$tmp/rip-watch-one-after-two" "$BIN" run --interactive "$ROOT/build/long_steps"
+check rip_watch_sixtyfour 0 session_exec "$tmp/rip-watch-sixtyfour" "$BIN" run --interactive "$ROOT/build/long_steps"
+check rip_watch_exhausted 0 session_exec "$tmp/rip-watch-exhausted" "$BIN" run --interactive "$ROOT/build/long_steps"
+check rip_watch_uppercase 0 session_exec "$tmp/rip-watch-uppercase" "$BIN" run --interactive "$ROOT/build/long_steps"
+check rip_watch_high_address 0 session_exec "$tmp/rip-watch-high-address" "$BIN" run --interactive "$ROOT/build/long_steps"
+check rip_watch_repeated 0 session_exec "$tmp/rip-watch-repeated" "$BIN" run --interactive "$ROOT/build/long_steps"
+check rip_watch_invalid 0 session_exec "$tmp/rip-watch-invalid" "$BIN" run --interactive "$ROOT/build/long_steps"
+check rip_watch_unknown 0 session_exec "$tmp/rip-watch-unknown" "$BIN" run --interactive "$ROOT/build/long_steps"
+check rip_watch_pending 0 session_exec "$tmp/rip-watch-pending" "$BIN" run --interactive "$ROOT/build/illegal"
+check rip_watch_trap 0 session_exec "$tmp/rip-watch-trap" "$BIN" run --interactive "$ROOT/build/trap"
+check rip_watch_early_exit 42 session_exec "$tmp/rip-watch-early-exit" "$BIN" run --interactive "$ROOT/build/exit42"
+check rip_watch_exec_cancel 0 session_exec "$tmp/rip-watch-exec-cancel" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check rip_watch_compact 0 session_exec "$tmp/rip-watch-compact" "$BIN" run --interactive --changes-only "$ROOT/build/long_steps"
+check rip_watch_eof 0 session_exec "$tmp/rip-watch-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
+check rip_watch_invalid_pending 0 session_exec "$tmp/rip-watch-invalid-pending" "$BIN" run --interactive "$ROOT/build/illegal"
 check session_continue 7 session_exec "$tmp/session-continue" "$BIN" run --interactive "$ROOT/build/exit7"
 check batch_step_four 0 session_exec "$tmp/batch-step-four" "$BIN" run --interactive "$ROOT/build/long_steps"
 check batch_step_sixteen 0 session_exec "$tmp/batch-step-sixteen" "$BIN" run --interactive "$ROOT/build/long_steps"
