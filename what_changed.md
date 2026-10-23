@@ -1,17 +1,18 @@
 # Rewind64 development progress
 
-## v0.2.14 machine-readable capabilities — 2026-10-23 (stacked development; not published)
+## v0.2.14 machine-readable capabilities — 2026-10-23 (experimental prerelease published)
 
-- Implemented native Assembly `--capabilities` as a strict target-free command, returning schema-v1 JSON documenting the real Linux ptrace backend, limits and unsupported features. No target process is launched.
-- Added CLI test coverage for schema values and repeatability, extra-argument rejection, help text, optional `jq` parse validation, and docs for client integrations. All new source code stays NASM, tests Bash, no Python.
-- Expected test total **222** after v0.2.13 (**217**) plus **5** checks; awaits CI confirmation. `v0.2.14-pre` follows the unmerged v0.2.13 development branch. No production release, replay or stable claim.
+- **Published:** [v0.2.14](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.14) from merged [PR #24](https://github.com/sanskarIN/Rewind64/pull/24), after ten development commits with author/committer `sanskarin@outlook.in`.
+- NASM `--capabilities` prints target-free schema-v1 JSON describing supported Linux ptrace run modes, bounded inspection and unavailable functionality; no traced target is launched.
+- **222/222 Python-free integration tests passed** on Ubuntu 22.04 and 24.04 at [PR head](https://github.com/sanskarIN/Rewind64/actions/runs/39910592007) and on [merged main](https://github.com/sanskarIN/Rewind64/actions/runs/39915509701). The [publishing workflow](https://github.com/sanskarIN/Rewind64/actions/runs/39915509678) succeeded and released the Linux archive and SHA-256 checksums.
+- Remains experimental Linux x86-64, single launched tracee, forward-only; no true reverse debugging, trace recording, process attachment, Windows/macOS backend or stable release.
 
-## v0.2.13 bounded signal history views — 2026-10-23 (development; not published)
+## v0.2.13 bounded signal history views — 2026-10-23 (experimental prerelease published)
 
-- **Work in progress:** native NASM `signals [N]` / `g [N]` selects the latest N=1..8 retained valid signal-delivery stops, while bare commands show the complete retained eight-slot ring. Indices remain truthful after wraparound.
-- Two bounded display metadata dwords use free space within the existing aligned debugger stack frame. Filtering does not modify the tracee, advance execution, inspect target registers/memory, or forward a pending signal.
-- Added **13** Python-free Bash/native Assembly black-box cases for wrapped ten-event signal history, empty and pending signals, invalid counts, aliases, EOF without a newline and compact mode. **217 total tests expected; CI not yet confirmed.**
-- Preserve the existing published v0.2.12 release and its assets pending review and passing CI for the next experimental prerelease. Continue to avoid any stable, replay or reverse-debugging claims.
+- **Published:** [v0.2.13](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.13) through merged [PR #23](https://github.com/sanskarIN/Rewind64/pull/23).
+- Added NASM `signals [N]` / `g [N]` filtering for the last 1–8 retained validated signal-delivery stops, preserving true indices across wraparound without resuming or forwarding pending signals.
+- Added 13 native Bash/NASM integration tests, making **217/217 pass** on both [Ubuntu 22.04 and 24.04](https://github.com/sanskarIN/Rewind64/actions/runs/39909255822). [Merged-main CI](https://github.com/sanskarIN/Rewind64/actions/runs/39910666722) and [prerelease workflow](https://github.com/sanskarIN/Rewind64/actions/runs/39910666671) also passed. Native executable and checksum assets published.
+- No Python, execution recording, replay or historical state restoration was introduced.
 
 ## v0.2.12 repeatable stop-on-signal — 2026-10-20 (experimental prerelease published)
 
