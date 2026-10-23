@@ -14,13 +14,14 @@ The command prints **one JSON document to stdout**, adds no framing text, and ex
 {
   "schema": 1,
   "name": "Rewind64",
-  "version": "0.2.15-pre",
+  "version": "0.2.16-pre",
   "platform": "linux-x86_64",
   "debug_backend": "ptrace",
   "execution": {
     "modes": ["bounded-step", "observe-only", "interactive"],
     "max_cli_steps": 64,
-    "max_interactive_step_batch": 16
+    "max_interactive_step_batch": 16,
+    "stop_on_exec": true
   },
   "inspection": {
     "registers": true,
@@ -55,6 +56,6 @@ Numbers are maxima for documented user-facing commands, not available kernel res
 
 ## Quality gates
 
-The Python-free Bash/native integration suite checks the exact command, JSON fields, limitation flags, help discovery, repeatability and rejection of unexpected arguments. When `jq` is already installed, the suite additionally parses the document and checks JSON field types/values without making `jq` a hard build prerequisite. The current suite targets **222 tests** (204 through v0.2.12, 13 for v0.2.13, and 5 for v0.2.14), pending GitHub CI on Ubuntu 22.04 and 24.04.
+The Python-free Bash/native integration suite checks the exact command, JSON fields, limitation flags, help discovery, repeatability and rejection of unexpected arguments. When `jq` is already installed, the suite additionally parses the document and checks JSON field types/values without making `jq` a hard build prerequisite. The published v0.2.15 suite passed **243 tests** on Ubuntu 22.04 and 24.04. The v0.2.16 development branch adds 14 exec-stop tests, targeting **257 total**, pending GitHub CI.
 
-This schema was introduced in published v0.2.14. The example above shows the **v0.2.15 development build**; consumers must treat the version field as build-dependent and may use the [published v0.2.14 release](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.14) for a released executable.
+This schema was introduced in published v0.2.14. The example above shows the **v0.2.16 development build**. Its `execution.stop_on_exec` property is true only for builds implementing the interactive `until-exec` command and denotes compiled support, not host ptrace permission. Consumers must treat the version field as build-dependent and may use the [published v0.2.15 release](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.15) for a released executable.
