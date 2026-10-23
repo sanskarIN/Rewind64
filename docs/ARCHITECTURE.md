@@ -26,6 +26,10 @@ At a real `PTRACE_EVENT_EXEC`, the debugger increments the exec-event counter, e
 
 Fixed input matching rejects arguments or case variants such as `until-exec 1` and `V`; a final command without LF is already normalized by v0.2.15. The 16 new native Bash/NASM regression scenarios cover real exec, alias, inspection, stepping, old-image history clearing, signals before exec, pending faults, no-exec termination, extra arguments, compact output and EOF. **259 total expected**, awaiting dual-Ubuntu CI.
 
+### First single-step after an exec event
+
+Linux may report a synthetic `TRAP_BRKPT` with **unchanged RIP** on the first single-step requested immediately after a genuine `PTRACE_EVENT_EXEC`. The debugger's `WAIT_NEXT_EXEC` state has values `0=off`, `1=awaiting exec`, `2=first post-exec step` and `3=one redundant stop already consumed`. For that narrowly scoped first step, Rewind64 checks the previous instruction bytes and rejects actual INT3 (`cc`), `INT 3` (`cd 03`) and ICEBP (`f1`) as synthetic steps. If the RIP has not advanced and the state is 2, it retries exactly **one** `PTRACE_SINGLESTEP` with signal zero; the redundant stop is not counted or forwarded. A second unchanged-RIP trap is not retried. Only successful verified instruction completion increments the step count, and real signal-delivery stops still follow the existing pending-signal rules. The new regression suite separately proves that a genuine INT3 *after* the first instruction is delivered to the application.
+
 ## Debugger state machine
 
 1. `fork()` once; child requests `PTRACE_TRACEME` and calls `execvp` with the caller-provided argument vector.
