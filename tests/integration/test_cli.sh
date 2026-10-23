@@ -86,7 +86,21 @@ capabilities_json() {
   assert_contains capabilities_json '"attach": false' &&
   [[ "${output: -1}" == "}" ]] &&
   assert_count capabilities_json 'Initial stop:' 0 &&
-  assert_count capabilities_json 'Usage:' 0
+  assert_count capabilities_json 'Usage:' 0 &&
+  { if command -v jq >/dev/null 2>&1; then
+      printf '%s\n' "$output" | jq -e '
+        .schema == 1 and
+        .version == "0.2.14-pre" and
+        .execution.max_cli_steps == 64 and
+        .execution.max_interactive_step_batch == 16 and
+        .inspection.signal_history_tail == true and
+        .limitations.forward_only == true and
+        .limitations.recording == false and
+        .limitations.attach == false
+      ' >/dev/null
+    else
+      true
+    fi; }
 }
 capabilities_repeat() {
   [[ "${output:0:1}" == "{" ]] &&
@@ -100,7 +114,7 @@ capabilities_invalid() {
 }
 capabilities_help() {
   assert_contains capabilities_help 'rewind64 --capabilities' &&
-  assert_contains capabilities_help 'v' || return 1
+  assert_contains capabilities_help 'machine-readable JSON'
 }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
