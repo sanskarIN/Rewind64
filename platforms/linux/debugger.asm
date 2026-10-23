@@ -124,6 +124,7 @@ section .rodata
     msg_pending_signal: db 'Interactive signal stop: signal %u pending; choose step, until-signal, until-exec, continue or quit.', 10, 0
     msg_exec_pause: db 'Interactive exec stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
     msg_rip_watch_hit: db 'RIP watch reached 0x%016lx after %u confirmed steps.', 10, 0
+    msg_rip_watch_stop: db 'RIP watch stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
     msg_rip_watch_limit: db 'RIP watch limit: target 0x%016lx not reached within 64 confirmed steps.', 10, 0
     msg_rip_watch_usage: db 'Usage: until-rip 0xHEX (1..16 hex digits; at most 64 verified steps; read-only target code)', 0
     msg_rip_watch_exec: db 'RIP watch canceled: tracee executed a new program image.', 0
@@ -1355,7 +1356,7 @@ debug_run:
     sub edx, [rbp+RIP_WATCH_START]
     xor eax, eax
     call printf
-    lea rdi, [rel msg_step]
+    lea rdi, [rel msg_rip_watch_stop]
     call .print_regs
     jmp .session_prompt
 .rip_watch_exhausted:
