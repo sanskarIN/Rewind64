@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.17 — in development (experimental Linux x86-64)
+
+- Add native NASM interactive `until-rip 0xHEX`, a finite single-instruction-address watch for the launched tracee. It uses **only PTRACE_SINGLESTEP** and current RIP comparisons, without modifying executable memory or inserting INT3 bytes. It checks the initial stopped RIP, otherwise advances at most **64 verified instructions** and then returns to the prompt with a bounded-exhaustion message.
+- Strictly accepts a `0x` or `0X` prefix plus 1–16 hex digits; rejects signs, extra arguments, whitespace, non-hex suffixes and overflow. Immediate and reached stops report cumulative/watch-local step counts and current registers. Signal delivery pauses with the signal still pending, and re-exec cancels watches for stale addresses.
+- Add **17** Bash/native NASM regression cases covering initial/middle/boundary hits, 64-step exhaustion, malformed inputs, signals, application INT3, target exit, exec cancellation, aliases, compact mode and EOF. **276 tests expected**, subject to Ubuntu 22.04/24.04 CI.
+- Grow the aligned Linux debugger frame from 1344 to 1376 bytes for four bounded watch-state slots; existing ring and register buffers remain disjoint. Static `--capabilities` advertises `execution.rip_watch=true`, `rip_watch_max_steps=64`, and continues to state `limitations.breakpoints=false` because no persistent software breakpoints exist.
+- This is **not yet published**; v0.2.16 remains the latest experimental release. No Python, process attachment, arbitrary memory writes, replay or reverse execution.
+
 ## v0.2.16 — 2026-10-23 (experimental Linux x86-64 prerelease)
 
 - Introduced native NASM interactive `until-exec` / `v`, an explicit `PTRACE_CONT` mode that pauses at the **next verified `PTRACE_EVENT_EXEC`** with a fresh register snapshot. Until that event, validated application signal stops are forwarded normally; synthetic ptrace stops do not become user signals.
