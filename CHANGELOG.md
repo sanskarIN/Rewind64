@@ -1,11 +1,11 @@
 # Changelog
 
-## v0.2.16 — in development (experimental Linux x86-64)
+## v0.2.16 — 2026-10-23 (experimental Linux x86-64 prerelease)
 
 - Introduced native NASM interactive `until-exec` / `v`, an explicit `PTRACE_CONT` mode that pauses at the **next verified `PTRACE_EVENT_EXEC`** with a fresh register snapshot. Until that event, validated application signal stops are forwarded normally; synthetic ptrace stops do not become user signals.
 - On the requested exec pause, resets debugger-owned RIP history for the replaced executable and records the new RIP labeled with the cumulative verified step count; refreshes the previous-register baseline before any subsequent step. Existing `continue`, `until-signal`, bounded stepping, signal history and automatic observation are preserved.
 - Uses the last disjoint dword in the existing 1344-byte stack frame for the opt-in exec mode, no heap, no trace recording or replay. Exposes `execution.stop_on_exec: true` in the static schema-v1 capabilities JSON.
-- Adds **16** Python-free native NASM/Bash integration checks covering exec and no-exec paths, real signal forwarding, post-exec stepping, history rebasing, EOF cleanup, strict command matching, aliases and concise output. Expected suite: **259 tests**, pending Ubuntu 22.04/24.04 CI and gated prerelease publication.
+- Adds **16** Python-free native NASM/Bash integration checks covering exec and no-exec paths, real signal forwarding, post-exec stepping, history rebasing, EOF cleanup, strict command matching, aliases and concise output. Expected suite: **259/259 tests passed** on Ubuntu 22.04 and 24.04 at [PR #28](https://github.com/sanskarIN/Rewind64/pull/28) head and merged main. The [v0.2.16 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.16) was published after the [gated release workflow](https://github.com/sanskarIN/Rewind64/actions/runs/39921645322) passed, including both supported Ubuntu runners and a separate packaging job.
 - Experimental Linux x86-64 only, single self-launched tracee, Boost Software License 1.0, no attachment, multi-thread tracing, reverse execution or stable release.
 
 ## v0.2.15 — 2026-10-23 (experimental Linux x86-64 prerelease)
