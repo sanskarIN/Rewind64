@@ -83,7 +83,7 @@ extern stdout
 %define WAIT_NEXT_SIGNAL   (-1332)   ; interactive PTRACE_CONT-to-next-signal mode
 %define SIGNAL_RING_LIMIT  (-1336)   ; requested tail count, clamped to stored stops
 %define SIGNAL_RING_SKIP   (-1340)   ; entries to skip from retained oldest stop
-%define WAIT_NEXT_EXEC     (-1344)   ; 0=off, 1=await exec, 2=first post-exec step
+%define WAIT_NEXT_EXEC     (-1344)   ; 0=off,1=await exec,2=first step,3=one spurious trap consumed
 %define SIGNAL_RING_CAPACITY 8
 %define SIGKILL            9
 %define SIGTRAP            5
@@ -347,12 +347,12 @@ debug_run:
     cmp ax, 0x050f              ; little-endian instruction bytes 0f 05
     je .step_completed
     ; Linux can classify the FIRST PTRACE_SINGLESTEP after an exec event
-    ; as TRAP_BRKPT even when the executed opcode is not a breakpoint.
-    ; Allow that narrow case only if this debugger actually paused at
-    ; PTRACE_EVENT_EXEC and the current RIP advanced. Genuine INT3,
-    ; INT 3, and ICEBP opcodes are still application traps.
+    ; as TRAP_BRKPT even if no instruction actually executed (RIP
+    ; unchanged). Suppress at most ONE such redundant stop, retry the
+    ; requested step with signal 0, and never count it as an instruction.
+    ; Genuine INT3, INT 3, and ICEBP opcodes remain application traps.
     cmp dword [rbp+WAIT_NEXT_EXEC], 2
-    jne .unexpected_trap_code
+    jb .unexpected_trap_code
     cmp al, 0xcc                 ; INT3
     je .unexpected_trap_code
     cmp ax, 0x03cd              ; INT imm8 3
@@ -364,7 +364,14 @@ debug_run:
     js .regs_failed
     mov rax, [rbp+REG_RIP]
     cmp rax, [rbp+PREVREGS+128]
-    je .unexpected_trap_code
+    jne .step_completed
+    ; A second no-progress BRKPT is NOT retried: avoid an unbounded
+    ; ptrace loop or hiding a real application breakpoint.
+    cmp dword [rbp+WAIT_NEXT_EXEC], 2
+    jne .unexpected_trap_code
+    mov dword [rbp+WAIT_NEXT_EXEC], 3
+    mov dword [rbp-36], 0
+    jmp .step_loop
 .step_completed:
     call .get_regs
     test eax, eax
@@ -1289,7 +1296,7 @@ debug_run:
     ; A real signal during a first post-exec step cancels the narrow
     ; synthetic-trap allowance, without cancelling an active exec watch.
     cmp dword [rbp+WAIT_NEXT_EXEC], 2
-    jne .valid_signal_keep_watch
+    jb .valid_signal_keep_watch
     mov dword [rbp+WAIT_NEXT_EXEC], 0
 .valid_signal_keep_watch:
     inc dword [rbp+OBSERVED_SIGNALS]
