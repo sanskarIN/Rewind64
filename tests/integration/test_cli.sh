@@ -1173,6 +1173,21 @@ until_exec_repeated() {
   assert_contains until_exec_repeated 'Target exited with status 42' &&
   assert_contains until_exec_repeated 'Signals forwarded: 0'
 }
+until_exec_first_step() {
+  assert_count until_exec_first_step 'Interactive exec stop:' 1 &&
+  assert_count until_exec_first_step 'After step:' 1 &&
+  assert_contains until_exec_first_step 'Interactive steps completed: 1' &&
+  assert_contains until_exec_first_step 'Signals forwarded: 0' &&
+  assert_not_running until_exec_first_step
+}
+until_exec_real_int3() {
+  assert_count until_exec_real_int3 'Interactive exec stop:' 1 &&
+  assert_count until_exec_real_int3 'After step:' 1 &&
+  assert_contains until_exec_real_int3 'Interactive signal stop: signal 5 pending' &&
+  assert_contains until_exec_real_int3 'steps=1 observed_signals=1 forwarded_signals=0 pending_signal=5' &&
+  assert_contains until_exec_real_int3 'Target terminated by signal 5' &&
+  assert_contains until_exec_real_int3 'Signals forwarded: 1'
+}
 until_exec_history_reset() {
   assert_count until_exec_history_reset 'After step:' 2 &&
   assert_count until_exec_history_reset 'Interactive exec stop:' 1 &&
@@ -1596,6 +1611,8 @@ printf 'v' > "$tmp/until-exec-alias-eof"
 printf 'v\nevents\nhistory\nquit\n' > "$tmp/until-exec-compact"
 printf 'v\nv\n' > "$tmp/until-exec-repeated"
 printf 'step 2\nv\nhistory\ncontinue\n' > "$tmp/until-exec-history-reset"
+printf 'v\nstep 1\nquit\n' > "$tmp/until-exec-first-step"
+printf 'v\nstep 2\nevents\ncontinue\n' > "$tmp/until-exec-real-int3"
 
 # v0.2.13 filtered signal-stop view scripts.
 printf 'signals 4\nstatus\nquit\n' > "$tmp/signal-tail-empty"
@@ -1808,6 +1825,8 @@ check until_exec_alias_eof 0 session_exec "$tmp/until-exec-alias-eof" "$BIN" run
 check until_exec_compact 0 session_exec "$tmp/until-exec-compact" "$BIN" run --interactive --changes-only "$ROOT/build/reexec" "$ROOT/build/exit42"
 check until_exec_repeated 42 session_exec "$tmp/until-exec-repeated" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
 check until_exec_history_reset 42 session_exec "$tmp/until-exec-history-reset" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_exec_first_step 0 session_exec "$tmp/until-exec-first-step" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_exec_real_int3 133 session_exec "$tmp/until-exec-real-int3" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/trap"
 check until_handled_twice 0 session_exec "$tmp/until-handled-twice" "$BIN" run --interactive "$ROOT/build/handled_signal"
 check until_burst_ring 0 session_exec "$tmp/until-burst-ring" "$BIN" run --interactive "$ROOT/build/signal_burst"
 check until_burst_repeat_read 0 session_exec "$tmp/until-burst-repeat" "$BIN" run --interactive "$ROOT/build/signal_burst"
