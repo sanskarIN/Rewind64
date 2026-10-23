@@ -4,11 +4,7 @@
 
 Rewind64 is an experimental, local-first, open-source native program inspection and debugger project. Its executable debugger logic is written in **x86-64 Assembly**. The first implementation targets **Linux x86-64 only**. Windows, macOS, recording, historical state navigation, and deterministic replay are roadmap items, **not implemented features**.
 
-> **Current published release:** [v0.2.12 experimental prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.12), Linux x86-64 only. This version adds `until-signal` / `u` to resume to the next validated application signal-delivery stop, enabling direct inspection of repeated handled signals. Python-free CI runs on Ubuntu 22.04/24.04. No stable release, execution recording, replay or reverse stepping is claimed. Debug only programs you own or have permission to debug. Process information may be sensitive.
-
-> **Development head (v0.2.13-pre, not yet published):** adds strict `signals [N]` / `g [N]` filtering for the latest 1–8 retained signal stops, keeping the original signal-stop history indices and leaving pending signal state unchanged. The published version above remains v0.2.12 until CI, review and release packaging complete.
-
-> **Stacked development work (v0.2.14-pre, not published):** Adds `--capabilities` for static machine-readable JSON feature discovery. This branch builds on the pending v0.2.13 signal-history PR; neither version is advertised as published until CI and release gates complete.
+> **Current published release:** [v0.2.14 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.14), published October 23, 2026. Native NASM `--capabilities` outputs schema-v1 JSON without launching a traced program. It includes v0.2.13's strict `signals [N]` / `g [N]` read-only filtered signal history. **222/222 Python-free tests passed** on Ubuntu 22.04 and 24.04 in [PR CI](https://github.com/sanskarIN/Rewind64/actions/runs/39910592007) and merged-main CI. The release contains a native Linux x86-64 executable archive and `SHA256SUMS.txt`; no stable release, recording, replay or reverse stepping is claimed. Only debug programs you own or have permission to inspect.
 
 ## Implemented
 
@@ -31,7 +27,7 @@ Rewind64 is an experimental, local-first, open-source native program inspection 
 - Request `PTRACE_O_EXITKILL` and use a bounded kill/ptrace-continue/wait loop after debugger errors to drain intermediate ptrace exit stops before reaping the child.
 - Linux NASM source, **Assembly-native fixtures**, Bash integration checks, and GitHub Actions CI on Ubuntu 22.04 and 24.04; **Python is not used**.
 
-### Filtered signal-stop history (development v0.2.13)
+### Filtered signal-stop history (available since v0.2.13)
 
 When stopped on an application signal, inspect the latest history entries without resuming the tracee:
 
@@ -65,7 +61,7 @@ make fixtures
 make test
 ```
 
-Built executable: `build/rewind64`. A checksum-verified native Linux archive is available on the [v0.2.12 release page](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.12). Build output is untracked. CI assembles canonical source with NASM, tests the result, and uploads a short-retention experimental binary on the [Actions page](https://github.com/sanskarIN/Rewind64/actions). Do not infer binary compatibility across OSes.
+Built executable: `build/rewind64`. A checksum-verified native Linux archive is available on the [v0.2.14 release page](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.14). Build output is untracked. CI assembles canonical source with NASM, tests the result, and uploads a short-retention experimental binary on the [Actions page](https://github.com/sanskarIN/Rewind64/actions). Do not infer binary compatibility across OSes.
 
 ## Usage
 
