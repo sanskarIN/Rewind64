@@ -65,7 +65,57 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.13-pre'; }
+version() { assert_contains version 'v0.2.14-pre'; }
+# v0.2.14 static machine-readable CLI metadata; must not fork a traced target.
+capabilities_json() {
+  [[ "${output:0:1}" == "{" ]] &&
+  assert_contains capabilities_json '"schema": 1' &&
+  assert_contains capabilities_json '"version": "0.2.14-pre"' &&
+  assert_contains capabilities_json '"platform": "linux-x86_64"' &&
+  assert_contains capabilities_json '"debug_backend": "ptrace"' &&
+  assert_contains capabilities_json '"modes": ["bounded-step", "observe-only", "interactive"]' &&
+  assert_contains capabilities_json '"max_cli_steps": 64' &&
+  assert_contains capabilities_json '"max_interactive_step_batch": 16' &&
+  assert_contains capabilities_json '"signal_history_tail": true' &&
+  assert_contains capabilities_json '"signal_history_max": 8' &&
+  assert_contains capabilities_json '"memory_words_max": 4' &&
+  assert_contains capabilities_json '"rip_history_max": 16' &&
+  assert_contains capabilities_json '"recording": false' &&
+  assert_contains capabilities_json '"reverse_execution": false' &&
+  assert_contains capabilities_json '"breakpoints": false' &&
+  assert_contains capabilities_json '"attach": false' &&
+  [[ "${output: -1}" == "}" ]] &&
+  assert_count capabilities_json 'Initial stop:' 0 &&
+  assert_count capabilities_json 'Usage:' 0 &&
+  { if command -v jq >/dev/null 2>&1; then
+      printf '%s\n' "$output" | jq -e '
+        .schema == 1 and
+        .version == "0.2.14-pre" and
+        .execution.max_cli_steps == 64 and
+        .execution.max_interactive_step_batch == 16 and
+        .inspection.signal_history_tail == true and
+        .limitations.forward_only == true and
+        .limitations.recording == false and
+        .limitations.attach == false
+      ' >/dev/null
+    else
+      true
+    fi; }
+}
+capabilities_repeat() {
+  [[ "${output:0:1}" == "{" ]] &&
+  assert_count capabilities_repeat '"schema": 1' 1 &&
+  assert_count capabilities_repeat '"version": "0.2.14-pre"' 1 &&
+  assert_count capabilities_repeat 'Initial stop:' 0
+}
+capabilities_invalid() {
+  assert_contains capabilities_invalid 'Error: --capabilities takes no arguments.' &&
+  assert_count capabilities_invalid 'Initial stop:' 0
+}
+capabilities_help() {
+  assert_contains capabilities_help 'rewind64 --capabilities' &&
+  assert_contains capabilities_help 'machine-readable JSON'
+}
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -1461,6 +1511,11 @@ printf '%062d\nquit\n' 0 > "$tmp/session-max-line"
 
 check help 0 "$BIN" --help
 check version 0 "$BIN" --version
+check capabilities_json 0 "$BIN" --capabilities
+check capabilities_repeat 0 "$BIN" --capabilities
+check capabilities_invalid 2 "$BIN" --capabilities unexpected
+check capabilities_invalid 2 "$BIN" --capabilities --
+check capabilities_help 0 "$BIN" --help
 check session_continue 7 session_exec "$tmp/session-continue" "$BIN" run --interactive "$ROOT/build/exit7"
 check batch_step_four 0 session_exec "$tmp/batch-step-four" "$BIN" run --interactive "$ROOT/build/long_steps"
 check batch_step_sixteen 0 session_exec "$tmp/batch-step-sixteen" "$BIN" run --interactive "$ROOT/build/long_steps"
