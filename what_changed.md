@@ -4,7 +4,7 @@
 
 - Native NASM `until-exec` / `v` pauses at the next confirmed ptrace exec event; refreshes registers, resets the RIP-history ring for the new image and leaves the tracee stopped for read-only inspection or explicit stepping.
 - Intermediate genuine application signals continue to be forwarded normally, while synthetic ptrace exec traps do not become user signal entries. Validated exec event counter increments once.
-- Added **14** Python-free Bash/native Assembly integration scenarios, targeting **257** total tests. GitHub Actions validation and prerelease publication are pending; all changes are experimental Linux x86-64 only.
+- Added **16** Python-free Bash/native Assembly integration scenarios, targeting **259** total tests. GitHub Actions validation and prerelease publication are pending; all changes are experimental Linux x86-64 only.
 
 ## v0.2.15 EOF-safe interactive command input — 2026-10-23 (experimental prerelease published)
 
