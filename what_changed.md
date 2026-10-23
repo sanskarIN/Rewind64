@@ -1,5 +1,12 @@
 # Rewind64 development progress
 
+## v0.2.17 bounded non-invasive RIP watch — 2026-10-23 (development; unpublished)
+
+- Implemented `until-rip 0xHEX` in NASM with strict 64-bit hexadecimal address parsing and a maximum of 64 verified single-step completions. No target code is modified, no persistent breakpoint is installed, and the tracee remains a single authorized launched process.
+- A watch stops on target RIP equality, on reaching its finite step cap, on a genuine signal-delivery stop, or on an exec event replacing the original image. Re-exec resets historical RIP baseline and cancels the stale watch.
+- Added 17 Python-free Bash/native Assembly regression tests; **276 total expected**, pending both Ubuntu CI runners. Static capability JSON advertises the watch but still truthfully reports `breakpoints=false`.
+- This contributes a safe precursor to the full software-breakpoint engine tracked in [Issue #25](https://github.com/sanskarIN/Rewind64/issues/25); no experimental prerelease is claimed until tests and packaging complete.
+
 ## v0.2.16 opt-in exec-event pause — 2026-10-23 (experimental prerelease published)
 
 - **Published:** [v0.2.16](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.16) from merged [PR #28](https://github.com/sanskarIN/Rewind64/pull/28), after 21 feature/verification commits using author and committer `sanskarin@outlook.in`.
