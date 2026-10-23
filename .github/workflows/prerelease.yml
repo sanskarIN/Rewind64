@@ -1,5 +1,5 @@
 name: Publish experimental Linux prerelease
-# Publishes the tested experimental v0.2.16 tag from main once this workflow is merged.
+# Publishes the tested experimental v0.2.17 tag from main once this workflow is merged.
 # The workflow requires both supported Ubuntu native suites before packaging and never overwrites an existing release.
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: rewind64-v0.2.16-prerelease
+  group: rewind64-v0.2.17-prerelease
   cancel-in-progress: false
 
 jobs:
@@ -50,24 +50,24 @@ jobs:
         run: make clean && make test
       - name: Package native binary with source license and documentation
         run: |
-          mkdir -p dist/package/rewind64-v0.2.16-linux-x86_64
-          install -m 0755 build/rewind64 dist/package/rewind64-v0.2.16-linux-x86_64/rewind64
-          cp README.md LICENSE dist/package/rewind64-v0.2.16-linux-x86_64/
-          tar -czf dist/rewind64-v0.2.16-linux-x86_64.tar.gz -C dist/package rewind64-v0.2.16-linux-x86_64
-          (cd dist && sha256sum rewind64-v0.2.16-linux-x86_64.tar.gz > SHA256SUMS.txt)
+          mkdir -p dist/package/rewind64-v0.2.17-linux-x86_64
+          install -m 0755 build/rewind64 dist/package/rewind64-v0.2.17-linux-x86_64/rewind64
+          cp README.md LICENSE dist/package/rewind64-v0.2.17-linux-x86_64/
+          tar -czf dist/rewind64-v0.2.17-linux-x86_64.tar.gz -C dist/package rewind64-v0.2.17-linux-x86_64
+          (cd dist && sha256sum rewind64-v0.2.17-linux-x86_64.tar.gz > SHA256SUMS.txt)
           cat dist/SHA256SUMS.txt
-      - name: Publish v0.2.16 prerelease
+      - name: Publish v0.2.17 prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.2.16 >/dev/null 2>&1; then
-            echo "v0.2.16 already published; will not overwrite it."
+          if gh release view v0.2.17 >/dev/null 2>&1; then
+            echo "v0.2.17 already published; will not overwrite it."
             exit 0
           fi
-          gh release create v0.2.16 \
-            dist/rewind64-v0.2.16-linux-x86_64.tar.gz \
+          gh release create v0.2.17 \
+            dist/rewind64-v0.2.17-linux-x86_64.tar.gz \
             dist/SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
-            --title "Rewind64 v0.2.16 (Linux x86-64 experimental)" \
-            --notes-file docs/releases/v0.2.16.md \
+            --title "Rewind64 v0.2.17 (Linux x86-64 experimental)" \
+            --notes-file docs/releases/v0.2.17.md \
             --prerelease
