@@ -34,11 +34,11 @@ section .rodata
                     db '  N must be 1..64; default N=1.', 10
                     db '  --observe-only captures initial state and follows events without stepping.', 10
                     db '  --steps, --observe-only and --interactive are mutually exclusive.', 10
-                    db '  --interactive supports step [1..16], until-signal, history [1..16], events, signals [1..8], regs, status, code, bytes [1..8], stack, mem 0xHEX [1..4], continue, help, quit.', 10
+                    db '  --interactive supports step [1..16], until-signal, until-exec, history [1..16], events, signals [1..8], regs, status, code, bytes [1..8], stack, mem 0xHEX [1..4], continue, help, quit.', 10
                     db '  --changes-only hides repeated full register tables, not CPU deltas.', 10
                     db '  -- ends option parsing (use for programs beginning with --).', 10
                     db 'Only Linux x86-64 run is implemented.', 0
-    version_text:   db 'Rewind64 v0.2.15-pre (Linux x86-64)', 0
+    version_text:   db 'Rewind64 v0.2.16-pre (Linux x86-64)', 0
     usage_error:    db 'Error: expected rewind64 run [--steps N | --observe-only | --interactive] [--changes-only] [--] PROGRAM [ARGS...].', 0
     steps_error:    db 'Error: steps must be in range 1..64 (decimal digits only).', 0
     options_error:  db 'Error: duplicate option; each run flag may be specified once.', 0
@@ -51,10 +51,10 @@ section .rodata
                      db '{', 10
                      db '  "schema": 1,', 10
                      db '  "name": "Rewind64",', 10
-                     db '  "version": "0.2.15-pre",', 10
+                     db '  "version": "0.2.16-pre",', 10
                      db '  "platform": "linux-x86_64",', 10
                      db '  "debug_backend": "ptrace",', 10
-                     db '  "execution": {"modes": ["bounded-step", "observe-only", "interactive"], "max_cli_steps": 64, "max_interactive_step_batch": 16},', 10
+                     db '  "execution": {"modes": ["bounded-step", "observe-only", "interactive"], "max_cli_steps": 64, "max_interactive_step_batch": 16, "stop_on_exec": true},', 10
                      db '  "inspection": {"registers": true, "memory_words_max": 4, "stack_words_max": 4, "rip_bytes_max": 8, "rip_history_max": 16, "signal_history_max": 8, "signal_history_tail": true},', 10
                      db '  "limitations": {"single_launched_tracee": true, "forward_only": true, "recording": false, "reverse_execution": false, "replay": false, "breakpoints": false, "attach": false}', 10
                      db '}', 0
