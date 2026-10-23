@@ -1,5 +1,11 @@
 # Rewind64 development progress
 
+## v0.2.14 machine-readable capabilities — 2026-10-23 (stacked development; not published)
+
+- Implemented native Assembly `--capabilities` as a strict target-free command, returning schema-v1 JSON documenting the real Linux ptrace backend, limits and unsupported features. No target process is launched.
+- Added CLI test coverage for schema values and repeatability, extra-argument rejection, help text, optional `jq` parse validation, and docs for client integrations. All new source code stays NASM, tests Bash, no Python.
+- Expected test total **222** after v0.2.13 (**217**) plus **5** checks; awaits CI confirmation. `v0.2.14-pre` follows the unmerged v0.2.13 development branch. No production release, replay or stable claim.
+
 ## v0.2.13 bounded signal history views — 2026-10-23 (development; not published)
 
 - **Work in progress:** native NASM `signals [N]` / `g [N]` selects the latest N=1..8 retained valid signal-delivery stops, while bare commands show the complete retained eight-slot ring. Indices remain truthful after wraparound.
