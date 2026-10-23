@@ -10,6 +10,14 @@ All executable debugger implementation in this milestone is Assembly in `src/cli
 
 The Linux CLI compares `--capabilities` exactly using libc `strcmp` and verifies that `argc==2` before calling `puts` on an immutable, assembled JSON string. Its version, platform, ptrace backend, execution-mode limits, read-only inspection sizes and unsupported feature booleans are **compile-time declarations**. This path does not call `debug_run`, `fork`, `ptrace` or `execvp`; it does not detect runtime tracing permission. Extra arguments result in exit code 2. `docs/CLI_CAPABILITIES.md` documents schema 1 and consumer compatibility requirements. The native Bash suite verifies the reported compile-time values and, when `jq` is installed, parses JSON; it retains zero Python dependencies.
 
+## v0.2.15 final-line input normalization (development)
+
+The debugger reads operator input into the existing 64-byte stack-local `SESSION_BUFFER` using `fgets`. The established overlong-line guard rejects a full 63-byte payload with no LF and drains the entire remainder rather than executing a suffix. Only a **short input that ends without LF** enters the new normalization path: `strlen` determines its length, the last byte is checked for LF, and a synthetic LF followed by NUL is appended in the already allocated buffer. The maximum accepted 62-byte command can therefore occupy bytes 0..61, LF byte 62 and NUL byte 63 without overflow. Newline-terminated input is never rewritten.
+
+This makes bare `regs`, `status`, `code`, `stack`, `bytes`, `history`, `help`, `step`, `continue`, `quit`, and their supported aliases behave at a final EOF-terminated line exactly as they do with LF. Existing numbered-command parsers remain strictly validated. An empty EOF read still takes the cleanup-and-reap path. New regressions confirm no unintended steps or signal delivery on read-only inspection, proper cleanup on implicit EOF, and no prefix-command confusion.
+
+The development v0.2.15 prerelease publishing workflow adds a **two-runner verify matrix** for Ubuntu 22.04/24.04 with `needs: verify` on the publishing job. A failure on either runner blocks packaging and release publication, independent of branch PR checks. The publishing runner repeats `make clean && make test` to verify the exact packaged source.
+
 ## Debugger state machine
 
 1. `fork()` once; child requests `PTRACE_TRACEME` and calls `execvp` with the caller-provided argument vector.
