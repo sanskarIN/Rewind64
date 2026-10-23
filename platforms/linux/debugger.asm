@@ -83,7 +83,7 @@ extern stdout
 %define WAIT_NEXT_SIGNAL   (-1332)   ; interactive PTRACE_CONT-to-next-signal mode
 %define SIGNAL_RING_LIMIT  (-1336)   ; requested tail count, clamped to stored stops
 %define SIGNAL_RING_SKIP   (-1340)   ; entries to skip from retained oldest stop
-%define WAIT_NEXT_EXEC     (-1344)   ; explicit opt-in pause at next ptrace exec event
+%define WAIT_NEXT_EXEC     (-1344)   ; 0=off, 1=await exec, 2=first post-exec step
 %define SIGNAL_RING_CAPACITY 8
 %define SIGKILL            9
 %define SIGTRAP            5
@@ -328,14 +328,43 @@ debug_run:
     ; TRAP_BRKPT instead of TRAP_TRACE. Only classify this as a synthetic
     ; step when the *previous* RIP points to the SYSCALL instruction (0f05).
     ; A user INT3 (cc) or generated SIGTRAP must still be delivered.
+    ; Check errno even for an all-ones ptrace word.
+    call __errno_location
+    mov dword [rax], 0
     mov edi, PTRACE_PEEKTEXT
     mov rsi, [rbp-16]
     mov rdx, [rbp+PREVREGS+128]   ; RIP before PTRACE_SINGLESTEP
     xor ecx, ecx
     xor eax, eax
     call ptrace
-    cmp ax, 0x050f              ; little-endian instruction bytes 0f 05
+    cmp rax, -1
+    jne .trap_word_ok
+    call __errno_location
+    cmp dword [rax], 0
     jne .unexpected_trap_code
+    mov rax, -1
+.trap_word_ok:
+    cmp ax, 0x050f              ; little-endian instruction bytes 0f 05
+    je .step_completed
+    ; Linux can classify the FIRST PTRACE_SINGLESTEP after an exec event
+    ; as TRAP_BRKPT even when the executed opcode is not a breakpoint.
+    ; Allow that narrow case only if this debugger actually paused at
+    ; PTRACE_EVENT_EXEC and the current RIP advanced. Genuine INT3,
+    ; INT 3, and ICEBP opcodes are still application traps.
+    cmp dword [rbp+WAIT_NEXT_EXEC], 2
+    jne .unexpected_trap_code
+    cmp al, 0xcc                 ; INT3
+    je .unexpected_trap_code
+    cmp ax, 0x03cd              ; INT imm8 3
+    je .unexpected_trap_code
+    cmp al, 0xf1                 ; ICEBP / INT1
+    je .unexpected_trap_code
+    call .get_regs
+    test eax, eax
+    js .regs_failed
+    mov rax, [rbp+REG_RIP]
+    cmp rax, [rbp+PREVREGS+128]
+    je .unexpected_trap_code
 .step_completed:
     call .get_regs
     test eax, eax
@@ -348,6 +377,7 @@ debug_run:
     call .save_regs             ; make current state the next baseline
     inc dword [rbp-272]        ; step label must include this completion
     call .record_rip            ; a confirmed step, not a signal/event stop
+    mov dword [rbp+WAIT_NEXT_EXEC], 0 ; consumed first post-exec grace
     cmp dword [rbp+SESSION_MODE], 0
     je .bounded_step_check
     ; A counted interactive step request is completed only after a real
@@ -1249,6 +1279,12 @@ debug_run:
     je .group_stop
     jmp .siginfo_failed
 .valid_signal_stop:
+    ; A real signal during a first post-exec step cancels the narrow
+    ; synthetic-trap allowance, without cancelling an active exec watch.
+    cmp dword [rbp+WAIT_NEXT_EXEC], 2
+    jne .valid_signal_keep_watch
+    mov dword [rbp+WAIT_NEXT_EXEC], 0
+.valid_signal_keep_watch:
     inc dword [rbp+OBSERVED_SIGNALS]
     mov eax, [rbp-36]
     mov [rbp+LAST_STOP_SIGNAL], eax
@@ -1376,11 +1412,11 @@ debug_run:
     mov dword [rbp+SESSION_REMAINING], 0
     cmp dword [rbp+SESSION_MODE], 0
     je .resume
-    cmp dword [rbp+WAIT_NEXT_EXEC], 0
-    je .resume
+    cmp dword [rbp+WAIT_NEXT_EXEC], 1
+    jne .resume
     ; The new image is actually stopped. Rebase debugger-owned register
     ; snapshots and RIP history to the new image before the next step.
-    mov dword [rbp+WAIT_NEXT_EXEC], 0
+    mov dword [rbp+WAIT_NEXT_EXEC], 2 ; scoped first-step trap classification
     call .get_regs
     test eax, eax
     js .regs_failed
