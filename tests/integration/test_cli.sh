@@ -1176,7 +1176,8 @@ rip_watch_exec_cancel() {
   assert_contains rip_watch_exec_cancel 'RIP watch canceled: tracee executed a new program image.' &&
   assert_contains rip_watch_exec_cancel 'exec_events=1 exit_events=0' &&
   assert_contains rip_watch_exec_cancel 'RIP history [0]:' &&
-  assert_contains rip_watch_exec_cancel 'steps=0 pending_signal=0' &&
+  assert_contains rip_watch_exec_cancel 'Session status: pid=' &&
+  assert_contains rip_watch_exec_cancel 'pending_signal=0 exec_events=1 exit_events=0' &&
   assert_not_running rip_watch_exec_cancel
 }
 rip_watch_compact() {
