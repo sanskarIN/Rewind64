@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.14 — in development (experimental Linux x86-64)
+
+- Added target-free `rewind64 --capabilities` to print a **single static JSON document** for IDE/automation integrations, with schema version 1, Linux ptrace backend, supported execution modes, command limits and explicit unsupported-feature flags. It does not launch, attach, trace or inspect a program.
+- Rejects any arguments after `--capabilities` with exit code 2; `--help` advertises the new operation. Development CLI version is `v0.2.14-pre`.
+- Added machine-readable contract documentation and **5** CLI integration cases for JSON content, repeated invocation, invalid arguments and help discovery. Optional `jq` validation runs when available without introducing a required dependency.
+- Expected combined suite **222** Python-free Bash/native NASM cases, pending Ubuntu 22.04/24.04 CI. Stacked on pending v0.2.13 PR; this is **not a published release**.
+- Scope remains forward-only Linux x86-64, single self-launched tracee, Boost Software License 1.0, no record/replay, historical state restoration, process attachment or stable release.
+
 ## v0.2.13 — in development (experimental Linux x86-64)
 
 - Added strict optional `signals [N]` / `g [N]` to show only the latest 1–8 validated signal-delivery records, defaulting to the entire retained history. Counts above currently available entries are clamped.
