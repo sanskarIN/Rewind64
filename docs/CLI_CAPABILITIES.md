@@ -1,6 +1,6 @@
 # Machine-readable capability discovery
 
-Rewind64 development v0.2.14 adds a static `--capabilities` command for IDE integrations, automated tooling, and end users who need to distinguish implemented features from roadmap ideas.
+Rewind64 v0.2.14 introduced a static `--capabilities` command for IDE integrations, automated tooling, and end users who need to distinguish implemented features from roadmap ideas.
 
 ```sh
 ./build/rewind64 --capabilities
@@ -14,7 +14,7 @@ The command prints **one JSON document to stdout**, adds no framing text, and ex
 {
   "schema": 1,
   "name": "Rewind64",
-  "version": "0.2.14-pre",
+  "version": "0.2.15-pre",
   "platform": "linux-x86_64",
   "debug_backend": "ptrace",
   "execution": {
@@ -57,4 +57,4 @@ Numbers are maxima for documented user-facing commands, not available kernel res
 
 The Python-free Bash/native integration suite checks the exact command, JSON fields, limitation flags, help discovery, repeatability and rejection of unexpected arguments. When `jq` is already installed, the suite additionally parses the document and checks JSON field types/values without making `jq` a hard build prerequisite. The current suite targets **222 tests** (204 through v0.2.12, 13 for v0.2.13, and 5 for v0.2.14), pending GitHub CI on Ubuntu 22.04 and 24.04.
 
-This document describes the **v0.2.14 development branch**, not a published release.
+This schema was introduced in published v0.2.14. The example above shows the **v0.2.15 development build**; consumers must treat the version field as build-dependent and may use the [published v0.2.14 release](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.14) for a released executable.
