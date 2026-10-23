@@ -5,6 +5,7 @@ set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 BIN="$ROOT/build/rewind64"
+EXPECTED_VERSION="0.2.15-pre" # canonical expected version for CLI and JSON test checks
 tmp="$(mktemp -d)"
 trap 'rm -rf -- "$tmp"' EXIT
 
@@ -65,12 +66,12 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.15-pre'; }
+version() { assert_contains version "v${EXPECTED_VERSION}"; }
 # v0.2.14 static machine-readable CLI metadata; must not fork a traced target.
 capabilities_json() {
   [[ "${output:0:1}" == "{" ]] &&
   assert_contains capabilities_json '"schema": 1' &&
-  assert_contains capabilities_json '"version": "0.2.15-pre"' &&
+  assert_contains capabilities_json "\"version\": \"${EXPECTED_VERSION}\"" &&
   assert_contains capabilities_json '"platform": "linux-x86_64"' &&
   assert_contains capabilities_json '"debug_backend": "ptrace"' &&
   assert_contains capabilities_json '"modes": ["bounded-step", "observe-only", "interactive"]' &&
@@ -88,9 +89,9 @@ capabilities_json() {
   assert_count capabilities_json 'Initial stop:' 0 &&
   assert_count capabilities_json 'Usage:' 0 &&
   { if command -v jq >/dev/null 2>&1; then
-      printf '%s\n' "$output" | jq -e '
+      printf '%s\n' "$output" | jq -e --arg expected_version "$EXPECTED_VERSION" '
         .schema == 1 and
-        .version == "0.2.15-pre" and
+        .version == $expected_version and
         .execution.max_cli_steps == 64 and
         .execution.max_interactive_step_batch == 16 and
         .inspection.signal_history_tail == true and
@@ -105,7 +106,7 @@ capabilities_json() {
 capabilities_repeat() {
   [[ "${output:0:1}" == "{" ]] &&
   assert_count capabilities_repeat '"schema": 1' 1 &&
-  assert_count capabilities_repeat '"version": "0.2.15-pre"' 1 &&
+  assert_count capabilities_repeat "\"version\": \"${EXPECTED_VERSION}\"" 1 &&
   assert_count capabilities_repeat 'Initial stop:' 0
 }
 capabilities_invalid() {
