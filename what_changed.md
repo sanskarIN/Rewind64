@@ -1,10 +1,12 @@
 # Rewind64 development progress
 
-## v0.2.16 opt-in exec-event pause — 2026-10-23 (development; unpublished)
+## v0.2.16 opt-in exec-event pause — 2026-10-23 (experimental prerelease published)
 
-- Native NASM `until-exec` / `v` pauses at the next confirmed ptrace exec event; refreshes registers, resets the RIP-history ring for the new image and leaves the tracee stopped for read-only inspection or explicit stepping.
-- Intermediate genuine application signals continue to be forwarded normally, while synthetic ptrace exec traps do not become user signal entries. Validated exec event counter increments once.
-- Added **16** Python-free Bash/native Assembly integration scenarios, targeting **259** total tests. GitHub Actions validation and prerelease publication are pending; all changes are experimental Linux x86-64 only.
+- **Published:** [v0.2.16](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.16) from merged [PR #28](https://github.com/sanskarIN/Rewind64/pull/28), after 21 feature/verification commits using author and committer `sanskarin@outlook.in`.
+- Native NASM `until-exec` / `v` pauses at the next genuine ptrace exec event, refreshes registers, and resets RIP history to the new image without recording or restoring earlier state. Intermediate application signals are forwarded normally.
+- Linux can report an extra no-progress SIGTRAP on the first post-exec single-step. The debugger retries at most once when the previous opcode is not INT3, INT 3 or ICEBP. The test suite verifies genuine INT3 remains an application signal and never becomes a completed step.
+- **259/259 Python-free native integration tests passed** on Ubuntu 22.04 and 24.04 in [final PR CI](https://github.com/sanskarIN/Rewind64/actions/runs/39921511509). The [release workflow](https://github.com/sanskarIN/Rewind64/actions/runs/39921645322) passed both supported Ubuntu native suites before final packaging, publishing the Linux x86-64 archive and SHA-256 checksums.
+- Experimental single-launched-tracee Linux x86-64 only. No stable release, breakpoint engine, process attachment, persistent trace, replay or reverse execution.
 
 ## v0.2.15 EOF-safe interactive command input — 2026-10-23 (experimental prerelease published)
 
