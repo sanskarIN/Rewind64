@@ -90,7 +90,7 @@ capabilities_json() {
   { if command -v jq >/dev/null 2>&1; then
       printf '%s\n' "$output" | jq -e '
         .schema == 1 and
-        .version == "0.2.14-pre" and
+        .version == "0.2.15-pre" and
         .execution.max_cli_steps == 64 and
         .execution.max_interactive_step_batch == 16 and
         .inspection.signal_history_tail == true and
