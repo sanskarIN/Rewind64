@@ -2,9 +2,13 @@
 
 ## Current scope
 
-`main` selects exactly three supported CLI operations: `--help`, `--version`, and `run`. `run` parses exactly one execution mode: `--steps N` (1..64, default 1), `--observe-only` (zero steps) or `--interactive` (stop-time console), and optionally `--changes-only`, in any order before the target; `--` terminates option parsing. The three execution mode flags are mutually exclusive. Duplicate flags are rejected. `debug_run` accepts a null-terminated `argv` vector and is available only in the Linux/x86-64 build.
+`main` supports `--help`, `--version`, the target-free JSON discovery command `--capabilities`, and `run`. `run` parses exactly one execution mode: `--steps N` (1..64, default 1), `--observe-only` (zero steps) or `--interactive` (stop-time console), and optionally `--changes-only`, in any order before the target; `--` terminates option parsing. The three execution mode flags are mutually exclusive. Duplicate flags are rejected. `debug_run` accepts a null-terminated `argv` vector and is available only in the Linux/x86-64 build.
 
 All executable debugger implementation in this milestone is Assembly in `src/cli/main.asm`, `platforms/linux/debugger.asm`, `src/registers/x86_64.asm`, and `src/registers/delta.asm`. The black-box test runner is Bash orchestration using native Assembly test fixtures; **Python is not required or used**. `Makefile` describes assembly and link steps. The program uses libc as an OS/API wrapper layer; no high-level language source file implements debugging logic.
+
+## Static CLI capability discovery (v0.2.14 development)
+
+The Linux CLI compares `--capabilities` exactly using libc `strcmp` and verifies that `argc==2` before calling `puts` on an immutable, assembled JSON string. Its version, platform, ptrace backend, execution-mode limits, read-only inspection sizes and unsupported feature booleans are **compile-time declarations**. This path does not call `debug_run`, `fork`, `ptrace` or `execvp`; it does not detect runtime tracing permission. Extra arguments result in exit code 2. `docs/CLI_CAPABILITIES.md` documents schema 1 and consumer compatibility requirements. The native Bash suite verifies the reported compile-time values and, when `jq` is installed, parses JSON; it retains zero Python dependencies.
 
 ## Debugger state machine
 
