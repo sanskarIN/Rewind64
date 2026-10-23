@@ -14,14 +14,16 @@ The command prints **one JSON document to stdout**, adds no framing text, and ex
 {
   "schema": 1,
   "name": "Rewind64",
-  "version": "0.2.16-pre",
+  "version": "0.2.17-pre",
   "platform": "linux-x86_64",
   "debug_backend": "ptrace",
   "execution": {
     "modes": ["bounded-step", "observe-only", "interactive"],
     "max_cli_steps": 64,
     "max_interactive_step_batch": 16,
-    "stop_on_exec": true
+    "stop_on_exec": true,
+    "rip_watch": true,
+    "rip_watch_max_steps": 64
   },
   "inspection": {
     "registers": true,
@@ -56,6 +58,8 @@ Numbers are maxima for documented user-facing commands, not available kernel res
 
 ## Quality gates
 
-The Python-free Bash/native integration suite checks the exact command, JSON fields, limitation flags, help discovery, repeatability and rejection of unexpected arguments. When `jq` is already installed, the suite additionally parses the document and checks JSON field types/values without making `jq` a hard build prerequisite. The published v0.2.15 suite passed **243 tests** on Ubuntu 22.04 and 24.04. The published v0.2.16 release adds 16 exec-stop tests, with **259/259 passing** on Ubuntu 22.04 and 24.04.
+The Python-free Bash/native integration suite checks the exact command, JSON fields, limitation flags, help discovery, repeatability and rejection of unexpected arguments. When `jq` is already installed, the suite additionally parses the document and checks JSON field types/values without making `jq` a hard build prerequisite. The published v0.2.15 suite passed **243 tests** on Ubuntu 22.04 and 24.04. The published v0.2.16 release adds 16 exec-stop tests, with **259/259 passing** on Ubuntu 22.04 and 24.04. The v0.2.17 development branch adds 17 finite RIP-watch tests, targeting **276**, pending CI.
 
-This schema was introduced in published v0.2.14. The example above shows the **published v0.2.16 version's** compiled feature contract. Its `execution.stop_on_exec` property is true only for builds implementing the interactive `until-exec` command and denotes compiled support, not host ptrace permission. Consumers must treat the version field as build-dependent and may use the [published v0.2.16 release](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.16) for a released executable.
+This schema was introduced in published v0.2.14. The example above shows the **v0.2.17 development version's** compiled feature contract. Its `execution.stop_on_exec` property is true only for builds implementing the interactive `until-exec` command and denotes compiled support, not host ptrace permission. Consumers must treat the version field as build-dependent and may use the [published v0.2.16 release](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.16) for a released executable.
+
+The `execution.rip_watch` field describes a **bounded 64-step, non-patching** address watch. It does not mean software breakpoints have been implemented. `limitations.breakpoints` intentionally remains `false` pending the separate breakpoint implementation and regression coverage.

@@ -84,6 +84,11 @@ extern stdout
 %define SIGNAL_RING_LIMIT  (-1336)   ; requested tail count, clamped to stored stops
 %define SIGNAL_RING_SKIP   (-1340)   ; entries to skip from retained oldest stop
 %define WAIT_NEXT_EXEC     (-1344)   ; 0=off,1=await exec,2=first step,3=one spurious trap consumed
+%define RIP_WATCH_ADDR     (-1352)   ; watched RIP, qword, never patched into target
+%define RIP_WATCH_ACTIVE   (-1356)   ; dword boolean
+%define RIP_WATCH_LEFT     (-1360)   ; dword: max 64 validated steps
+%define RIP_WATCH_START    (-1364)   ; dword starting cumulative step count
+%define RIP_WATCH_CAPACITY 64
 %define SIGNAL_RING_CAPACITY 8
 %define SIGKILL            9
 %define SIGTRAP            5
@@ -99,7 +104,7 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step [1..16] | until-signal | until-exec | history [1..16] | events | signals [1..8] | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step [1..16] | until-signal | until-exec | until-rip 0xHEX | history [1..16] | events | signals [1..8] | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
     msg_signal_history_entry: db 'Signal history [%u]: signal=%u si_code=%d step=%u', 10, 0
     msg_signal_history_empty: db 'Signal history: no validated signal-delivery stops yet.', 0
     msg_signal_history_usage: db 'Usage: signals [1..8] or g [1..8] (show latest N; default all retained)', 0
@@ -118,6 +123,11 @@ section .rodata
     msg_session_status: db 'Session status: pid=%ld steps=%u pending_signal=%u', 10, 0
     msg_pending_signal: db 'Interactive signal stop: signal %u pending; choose step, until-signal, until-exec, continue or quit.', 10, 0
     msg_exec_pause: db 'Interactive exec stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
+    msg_rip_watch_hit: db 'RIP watch reached 0x%016lx after %u confirmed steps.', 10, 0
+    msg_rip_watch_stop: db 'RIP watch stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
+    msg_rip_watch_limit: db 'RIP watch limit: target 0x%016lx not reached within 64 confirmed steps.', 10, 0
+    msg_rip_watch_usage: db 'Usage: until-rip 0xHEX (1..16 hex digits; at most 64 verified steps; read-only target code)', 0
+    msg_rip_watch_exec: db 'RIP watch canceled: tracee executed a new program image.', 0
     msg_session_prompt: db 'rewind64> ', 0
     msg_session_unknown: db 'Unknown session command. Type help.', 0
     msg_session_overlong: db 'Error: session command too long (maximum 62 bytes); line discarded.', 0
@@ -142,6 +152,7 @@ section .rodata
     cmd_until_signal: db 'until-signal', 10, 0
     cmd_short_until_signal: db 'u', 10, 0
     cmd_until_exec: db 'until-exec', 10, 0
+    cmd_until_rip: db 'until-rip ', 0
     cmd_short_until_exec: db 'v', 10, 0
     cmd_until_signal_eof: db 'until-signal', 0
     cmd_short_until_signal_eof: db 'u', 0
@@ -206,7 +217,7 @@ section .text
 debug_run:
     push rbp
     mov rbp, rsp
-    sub rsp, 1344
+    sub rsp, 1376
     mov [rbp-8], rdi              ; argv vector from CLI
     mov dword [rbp-264], esi      ; requested maximum steps
     mov dword [rbp-40], edx       ; compact register display flag
@@ -223,6 +234,7 @@ debug_run:
     mov dword [rbp+SIGNAL_RING_COUNT], 0
     mov dword [rbp+WAIT_NEXT_SIGNAL], 0
     mov dword [rbp+WAIT_NEXT_EXEC], 0
+    mov dword [rbp+RIP_WATCH_ACTIVE], 0
     mov dword [rbp-36], 0         ; no pending tracee signal initially
     mov dword [rbp-272], 0        ; completed steps
     mov dword [rbp+SIGNAL_STOPS], 0 ; observed signal-delivery stops
@@ -376,6 +388,8 @@ debug_run:
     call .get_regs
     test eax, eax
     js .regs_failed
+    cmp dword [rbp+RIP_WATCH_ACTIVE], 0
+    jne .rip_watch_step_completed
     lea rdi, [rel msg_step]
     call .print_regs
     lea rdi, [rbp+PREVREGS]
@@ -394,6 +408,18 @@ debug_run:
     mov dword [rbp+SESSION_STEPPING], 0
     mov dword [rbp+SESSION_REMAINING], 0
     jmp .session_prompt
+.rip_watch_step_completed:
+    ; One verified instruction step, without intermediate register floods.
+    call .save_regs
+    inc dword [rbp-272]
+    call .record_rip
+    mov dword [rbp+WAIT_NEXT_EXEC], 0
+    mov rax, [rbp+REG_RIP]
+    cmp rax, [rbp+RIP_WATCH_ADDR]
+    je .rip_watch_hit
+    dec dword [rbp+RIP_WATCH_LEFT]
+    jz .rip_watch_exhausted
+    jmp .step_loop
 .bounded_step_check:
     mov eax, [rbp-272]
     cmp eax, [rbp-264]
@@ -811,6 +837,32 @@ debug_run:
     call strcmp
     test eax, eax
     jz .session_until_signal
+    ; Finite, non-invasive RIP watch: only PTRACE_SINGLESTEP, no
+    ; code patch or debugger-inserted INT3. Parse exactly 0x + 1..16 hex.
+    lea rsi, [rbp+SESSION_BUFFER]
+    cmp byte [rsi], 'u'
+    jne .session_not_rip_watch
+    cmp byte [rsi+1], 'n'
+    jne .session_not_rip_watch
+    cmp byte [rsi+2], 't'
+    jne .session_not_rip_watch
+    cmp byte [rsi+3], 'i'
+    jne .session_not_rip_watch
+    cmp byte [rsi+4], 'l'
+    jne .session_not_rip_watch
+    cmp byte [rsi+5], '-'
+    jne .session_not_rip_watch
+    cmp byte [rsi+6], 'r'
+    jne .session_not_rip_watch
+    cmp byte [rsi+7], 'i'
+    jne .session_not_rip_watch
+    cmp byte [rsi+8], 'p'
+    jne .session_not_rip_watch
+    cmp byte [rsi+9], ' '
+    jne .session_not_rip_watch
+    add rsi, 10
+    jmp .session_rip_watch_parse
+.session_not_rip_watch:
     ; Opt-in pause at the next PTRACE_EVENT_EXEC generated by the
     ; launched target. The final EOF command is normalized before dispatch.
     lea rdi, [rbp+SESSION_BUFFER]
@@ -961,6 +1013,7 @@ debug_run:
     inc dword [rbp+SIGNAL_RING_PRINT]
     jmp .signals_next
 .session_step:
+    mov dword [rbp+RIP_WATCH_ACTIVE], 0
     mov dword [rbp+WAIT_NEXT_SIGNAL], 0
     mov dword [rbp+SESSION_REMAINING], 1
     mov dword [rbp+SESSION_STEPPING], 1
@@ -1226,7 +1279,96 @@ debug_run:
     lea rdi, [rel msg_memory_usage]
     call puts
     jmp .session_prompt
+.session_rip_watch_parse:
+    cmp byte [rsi], '0'
+    jne .session_rip_watch_usage
+    movzx eax, byte [rsi+1]
+    cmp al, 'x'
+    je .rip_watch_prefix_ok
+    cmp al, 'X'
+    jne .session_rip_watch_usage
+.rip_watch_prefix_ok:
+    add rsi, 2
+    xor edx, edx                 ; watched address
+    xor ecx, ecx                 ; number of hex digits (1..16)
+.rip_watch_digit:
+    movzx r8d, byte [rsi]
+    cmp r8b, 10
+    je .rip_watch_end
+    test r8b, r8b
+    jz .rip_watch_end
+    cmp r8b, '0'
+    jb .session_rip_watch_usage
+    cmp r8b, '9'
+    jbe .rip_watch_decimal
+    cmp r8b, 'A'
+    jb .rip_watch_lower
+    cmp r8b, 'F'
+    jbe .rip_watch_upper
+.rip_watch_lower:
+    cmp r8b, 'a'
+    jb .session_rip_watch_usage
+    cmp r8b, 'f'
+    ja .session_rip_watch_usage
+    sub r8d, 'a'-10
+    jmp .rip_watch_append
+.rip_watch_upper:
+    sub r8d, 'A'-10
+    jmp .rip_watch_append
+.rip_watch_decimal:
+    sub r8d, '0'
+.rip_watch_append:
+    cmp ecx, 16
+    jae .session_rip_watch_usage
+    shl rdx, 4
+    or rdx, r8
+    inc ecx
+    inc rsi
+    jmp .rip_watch_digit
+.rip_watch_end:
+    test ecx, ecx
+    jz .session_rip_watch_usage
+    mov [rbp+RIP_WATCH_ADDR], rdx
+    call .get_regs
+    test eax, eax
+    js .regs_failed
+    mov eax, [rbp-272]
+    mov dword [rbp+RIP_WATCH_START], eax
+    mov dword [rbp+RIP_WATCH_LEFT], RIP_WATCH_CAPACITY
+    mov dword [rbp+RIP_WATCH_ACTIVE], 1
+    mov dword [rbp+WAIT_NEXT_SIGNAL], 0
+    mov dword [rbp+SESSION_STEPPING], 1
+    mov dword [rbp+SESSION_REMAINING], 0
+    mov rax, [rbp+REG_RIP]
+    cmp rax, [rbp+RIP_WATCH_ADDR]
+    je .rip_watch_hit
+    jmp .step_loop
+.session_rip_watch_usage:
+    lea rdi, [rel msg_rip_watch_usage]
+    call puts
+    jmp .session_prompt
+.rip_watch_hit:
+    mov dword [rbp+RIP_WATCH_ACTIVE], 0
+    mov dword [rbp+SESSION_STEPPING], 0
+    lea rdi, [rel msg_rip_watch_hit]
+    mov rsi, [rbp+RIP_WATCH_ADDR]
+    mov edx, [rbp-272]
+    sub edx, [rbp+RIP_WATCH_START]
+    xor eax, eax
+    call printf
+    lea rdi, [rel msg_rip_watch_stop]
+    call .print_regs
+    jmp .session_prompt
+.rip_watch_exhausted:
+    mov dword [rbp+RIP_WATCH_ACTIVE], 0
+    mov dword [rbp+SESSION_STEPPING], 0
+    lea rdi, [rel msg_rip_watch_limit]
+    mov rsi, [rbp+RIP_WATCH_ADDR]
+    xor eax, eax
+    call printf
+    jmp .session_prompt
 .session_until_exec:
+    mov dword [rbp+RIP_WATCH_ACTIVE], 0
     ; Continue across ordinary validated signal-delivery stops, forwarding
     ; them normally; pause only at the next synthetic ptrace EXEC event.
     mov dword [rbp+WAIT_NEXT_EXEC], 1
@@ -1235,6 +1377,7 @@ debug_run:
     mov dword [rbp+SESSION_REMAINING], 0
     jmp .resume
 .session_until_signal:
+    mov dword [rbp+RIP_WATCH_ACTIVE], 0
     ; Resumes via PTRACE_CONT; on the next genuine signal-delivery
     ; stop, show the pending signal and return to the interactive prompt.
     ; If an earlier pending signal exists, forward it exactly once
@@ -1246,6 +1389,7 @@ debug_run:
     mov dword [rbp+SESSION_REMAINING], 0
     jmp .resume
 .session_continue:
+    mov dword [rbp+RIP_WATCH_ACTIVE], 0
     ; If paused by a genuine signal-delivery stop, continue forwards
     ; the recorded pending signal rather than silently swallowing it.
     mov dword [rbp+WAIT_NEXT_EXEC], 0
@@ -1333,6 +1477,7 @@ debug_run:
     cmp dword [rbp+SESSION_STEPPING], 0
     je .resume
 .signal_prompt:
+    mov dword [rbp+RIP_WATCH_ACTIVE], 0
     mov dword [rbp+WAIT_NEXT_SIGNAL], 0
     mov dword [rbp+SESSION_STEPPING], 0
     mov dword [rbp+SESSION_REMAINING], 0
@@ -1426,6 +1571,8 @@ debug_run:
     mov dword [rbp+SESSION_REMAINING], 0
     cmp dword [rbp+SESSION_MODE], 0
     je .resume
+    cmp dword [rbp+RIP_WATCH_ACTIVE], 0
+    jne .rip_watch_exec_cancel
     cmp dword [rbp+WAIT_NEXT_EXEC], 1
     jne .resume
     ; The new image is actually stopped. Rebase debugger-owned register
@@ -1440,6 +1587,20 @@ debug_run:
     call .record_rip
     lea rdi, [rel msg_exec_pause]
     call .print_regs
+    jmp .session_prompt
+.rip_watch_exec_cancel:
+    ; The old address is no longer meaningful in a replaced image.
+    mov dword [rbp+RIP_WATCH_ACTIVE], 0
+    mov dword [rbp+WAIT_NEXT_EXEC], 2
+    call .get_regs
+    test eax, eax
+    js .regs_failed
+    call .save_regs
+    mov dword [rbp+HISTORY_NEXT], 0
+    mov dword [rbp+HISTORY_COUNT], 0
+    call .record_rip
+    lea rdi, [rel msg_rip_watch_exec]
+    call puts
     jmp .session_prompt
 .observed_exit:
     inc dword [rbp+EXIT_EVENTS]
