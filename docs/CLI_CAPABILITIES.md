@@ -21,7 +21,9 @@ The command prints **one JSON document to stdout**, adds no framing text, and ex
     "modes": ["bounded-step", "observe-only", "interactive"],
     "max_cli_steps": 64,
     "max_interactive_step_batch": 16,
-    "stop_on_exec": true,\n    "rip_watch": true,\n    "rip_watch_max_steps": 64
+    "stop_on_exec": true,
+    "rip_watch": true,
+    "rip_watch_max_steps": 64
   },
   "inspection": {
     "registers": true,
