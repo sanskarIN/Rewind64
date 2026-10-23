@@ -83,6 +83,7 @@ extern stdout
 %define WAIT_NEXT_SIGNAL   (-1332)   ; interactive PTRACE_CONT-to-next-signal mode
 %define SIGNAL_RING_LIMIT  (-1336)   ; requested tail count, clamped to stored stops
 %define SIGNAL_RING_SKIP   (-1340)   ; entries to skip from retained oldest stop
+%define WAIT_NEXT_EXEC     (-1344)   ; 0=off,1=await exec,2=first step,3=one spurious trap consumed
 %define SIGNAL_RING_CAPACITY 8
 %define SIGKILL            9
 %define SIGTRAP            5
@@ -98,7 +99,7 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step [1..16] | until-signal | history [1..16] | events | signals [1..8] | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step [1..16] | until-signal | until-exec | history [1..16] | events | signals [1..8] | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
     msg_signal_history_entry: db 'Signal history [%u]: signal=%u si_code=%d step=%u', 10, 0
     msg_signal_history_empty: db 'Signal history: no validated signal-delivery stops yet.', 0
     msg_signal_history_usage: db 'Usage: signals [1..8] or g [1..8] (show latest N; default all retained)', 0
@@ -115,7 +116,8 @@ section .rodata
     msg_stack_word: db 'Stack word [%u] at 0x%016lx: 0x%016lx', 10, 0
     msg_code_word: db 'Code word at RIP=0x%016lx: 0x%016lx', 10, 0
     msg_session_status: db 'Session status: pid=%ld steps=%u pending_signal=%u', 10, 0
-    msg_pending_signal: db 'Interactive signal stop: signal %u pending; choose step, until-signal, continue or quit.', 10, 0
+    msg_pending_signal: db 'Interactive signal stop: signal %u pending; choose step, until-signal, until-exec, continue or quit.', 10, 0
+    msg_exec_pause: db 'Interactive exec stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
     msg_session_prompt: db 'rewind64> ', 0
     msg_session_unknown: db 'Unknown session command. Type help.', 0
     msg_session_overlong: db 'Error: session command too long (maximum 62 bytes); line discarded.', 0
@@ -139,6 +141,8 @@ section .rodata
     cmd_short_signals: db 'g', 10, 0
     cmd_until_signal: db 'until-signal', 10, 0
     cmd_short_until_signal: db 'u', 10, 0
+    cmd_until_exec: db 'until-exec', 10, 0
+    cmd_short_until_exec: db 'v', 10, 0
     cmd_until_signal_eof: db 'until-signal', 0
     cmd_short_until_signal_eof: db 'u', 0
     cmd_signals_eof: db 'signals', 0
@@ -164,7 +168,7 @@ section .rodata
     msg_exit_detail: db 'Ptrace exit detail: raw_wait=0x%08lx', 10, 0
     msg_event_total: db 'Ptrace events: exec=%u exit=%u', 10, 0
     err_event:      db 'Error: unsupported ptrace event %u', 10, 0
-    msg_other_trap: db 'Unexpected SIGTRAP si_code=%d during step', 10, 0
+    msg_other_trap: db 'Unexpected SIGTRAP si_code=%d during step exec_state=%u prior_RIP=0x%016lx stopped_RIP=0x%016lx', 10, 0
     err_fork:      db 'fork', 0
     err_trace:     db 'ptrace(TRACEME)', 0
     err_exec:      db 'execvp', 0
@@ -218,6 +222,7 @@ debug_run:
     mov dword [rbp+SIGNAL_RING_NEXT], 0
     mov dword [rbp+SIGNAL_RING_COUNT], 0
     mov dword [rbp+WAIT_NEXT_SIGNAL], 0
+    mov dword [rbp+WAIT_NEXT_EXEC], 0
     mov dword [rbp-36], 0         ; no pending tracee signal initially
     mov dword [rbp-272], 0        ; completed steps
     mov dword [rbp+SIGNAL_STOPS], 0 ; observed signal-delivery stops
@@ -323,14 +328,50 @@ debug_run:
     ; TRAP_BRKPT instead of TRAP_TRACE. Only classify this as a synthetic
     ; step when the *previous* RIP points to the SYSCALL instruction (0f05).
     ; A user INT3 (cc) or generated SIGTRAP must still be delivered.
+    ; Check errno even for an all-ones ptrace word.
+    call __errno_location
+    mov dword [rax], 0
     mov edi, PTRACE_PEEKTEXT
     mov rsi, [rbp-16]
     mov rdx, [rbp+PREVREGS+128]   ; RIP before PTRACE_SINGLESTEP
     xor ecx, ecx
     xor eax, eax
     call ptrace
-    cmp ax, 0x050f              ; little-endian instruction bytes 0f 05
+    cmp rax, -1
+    jne .trap_word_ok
+    call __errno_location
+    cmp dword [rax], 0
     jne .unexpected_trap_code
+    mov rax, -1
+.trap_word_ok:
+    cmp ax, 0x050f              ; little-endian instruction bytes 0f 05
+    je .step_completed
+    ; Linux can classify the FIRST PTRACE_SINGLESTEP after an exec event
+    ; as TRAP_BRKPT even if no instruction actually executed (RIP
+    ; unchanged). Suppress at most ONE such redundant stop, retry the
+    ; requested step with signal 0, and never count it as an instruction.
+    ; Genuine INT3, INT 3, and ICEBP opcodes remain application traps.
+    cmp dword [rbp+WAIT_NEXT_EXEC], 2
+    jb .unexpected_trap_code
+    cmp al, 0xcc                 ; INT3
+    je .unexpected_trap_code
+    cmp ax, 0x03cd              ; INT imm8 3
+    je .unexpected_trap_code
+    cmp al, 0xf1                 ; ICEBP / INT1
+    je .unexpected_trap_code
+    call .get_regs
+    test eax, eax
+    js .regs_failed
+    mov rax, [rbp+REG_RIP]
+    cmp rax, [rbp+PREVREGS+128]
+    jne .step_completed
+    ; A second no-progress BRKPT is NOT retried: avoid an unbounded
+    ; ptrace loop or hiding a real application breakpoint.
+    cmp dword [rbp+WAIT_NEXT_EXEC], 2
+    jne .unexpected_trap_code
+    mov dword [rbp+WAIT_NEXT_EXEC], 3
+    mov dword [rbp-36], 0
+    jmp .step_loop
 .step_completed:
     call .get_regs
     test eax, eax
@@ -343,6 +384,7 @@ debug_run:
     call .save_regs             ; make current state the next baseline
     inc dword [rbp-272]        ; step label must include this completion
     call .record_rip            ; a confirmed step, not a signal/event stop
+    mov dword [rbp+WAIT_NEXT_EXEC], 0 ; consumed first post-exec grace
     cmp dword [rbp+SESSION_MODE], 0
     je .bounded_step_check
     ; A counted interactive step request is completed only after a real
@@ -769,6 +811,18 @@ debug_run:
     call strcmp
     test eax, eax
     jz .session_until_signal
+    ; Opt-in pause at the next PTRACE_EVENT_EXEC generated by the
+    ; launched target. The final EOF command is normalized before dispatch.
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_until_exec]
+    call strcmp
+    test eax, eax
+    jz .session_until_exec
+    lea rdi, [rbp+SESSION_BUFFER]
+    lea rsi, [rel cmd_short_until_exec]
+    call strcmp
+    test eax, eax
+    jz .session_until_exec
     lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_continue]
     call strcmp
@@ -1172,6 +1226,14 @@ debug_run:
     lea rdi, [rel msg_memory_usage]
     call puts
     jmp .session_prompt
+.session_until_exec:
+    ; Continue across ordinary validated signal-delivery stops, forwarding
+    ; them normally; pause only at the next synthetic ptrace EXEC event.
+    mov dword [rbp+WAIT_NEXT_EXEC], 1
+    mov dword [rbp+WAIT_NEXT_SIGNAL], 0
+    mov dword [rbp+SESSION_STEPPING], 0
+    mov dword [rbp+SESSION_REMAINING], 0
+    jmp .resume
 .session_until_signal:
     ; Resumes via PTRACE_CONT; on the next genuine signal-delivery
     ; stop, show the pending signal and return to the interactive prompt.
@@ -1179,12 +1241,14 @@ debug_run:
     ; on this resume. Exec events can occur en route and are followed;
     ; target termination ends the session without fabricating a stop.
     mov dword [rbp+WAIT_NEXT_SIGNAL], 1
+    mov dword [rbp+WAIT_NEXT_EXEC], 0
     mov dword [rbp+SESSION_STEPPING], 0
     mov dword [rbp+SESSION_REMAINING], 0
     jmp .resume
 .session_continue:
     ; If paused by a genuine signal-delivery stop, continue forwards
     ; the recorded pending signal rather than silently swallowing it.
+    mov dword [rbp+WAIT_NEXT_EXEC], 0
     mov dword [rbp+WAIT_NEXT_SIGNAL], 0
     mov dword [rbp+SESSION_STEPPING], 0
     mov dword [rbp+SESSION_REMAINING], 0
@@ -1197,8 +1261,15 @@ debug_run:
     jmp .cleanup
 
 .unexpected_trap_code:
+    ; Include debugger state in diagnostics without altering the target.
+    call .get_regs
+    test eax, eax
+    js .regs_failed
     lea rdi, [rel msg_other_trap]
     mov esi, [rbp+SIGINFO+8]
+    mov edx, [rbp+WAIT_NEXT_EXEC]
+    mov rcx, [rbp+PREVREGS+128]
+    mov r8, [rbp+REG_RIP]
     xor eax, eax
     call printf
     jmp .interrupted_step
@@ -1222,6 +1293,12 @@ debug_run:
     je .group_stop
     jmp .siginfo_failed
 .valid_signal_stop:
+    ; A real signal during a first post-exec step cancels the narrow
+    ; synthetic-trap allowance, without cancelling an active exec watch.
+    cmp dword [rbp+WAIT_NEXT_EXEC], 2
+    jb .valid_signal_keep_watch
+    mov dword [rbp+WAIT_NEXT_EXEC], 0
+.valid_signal_keep_watch:
     inc dword [rbp+OBSERVED_SIGNALS]
     mov eax, [rbp-36]
     mov [rbp+LAST_STOP_SIGNAL], eax
@@ -1341,7 +1418,29 @@ debug_run:
 .observed_exec:
     inc dword [rbp+EXEC_EVENTS]
     lea rdi, [rel msg_exec_event]
-    jmp .event_print
+    mov rsi, [rbp-16]
+    xor eax, eax
+    call printf
+    mov dword [rbp-36], 0             ; synthetic ptrace stop, not SIGTRAP
+    mov dword [rbp+SESSION_STEPPING], 0
+    mov dword [rbp+SESSION_REMAINING], 0
+    cmp dword [rbp+SESSION_MODE], 0
+    je .resume
+    cmp dword [rbp+WAIT_NEXT_EXEC], 1
+    jne .resume
+    ; The new image is actually stopped. Rebase debugger-owned register
+    ; snapshots and RIP history to the new image before the next step.
+    mov dword [rbp+WAIT_NEXT_EXEC], 2 ; scoped first-step trap classification
+    call .get_regs
+    test eax, eax
+    js .regs_failed
+    call .save_regs
+    mov dword [rbp+HISTORY_NEXT], 0
+    mov dword [rbp+HISTORY_COUNT], 0
+    call .record_rip
+    lea rdi, [rel msg_exec_pause]
+    call .print_regs
+    jmp .session_prompt
 .observed_exit:
     inc dword [rbp+EXIT_EVENTS]
     call .get_event_message

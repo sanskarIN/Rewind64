@@ -1,11 +1,16 @@
 # Rewind64 development progress
 
-## v0.2.15 EOF-safe interactive command input — 2026-10-23 (development; unpublished)
+## v0.2.16 opt-in exec-event pause — 2026-10-23 (development; unpublished)
 
-- New NASM input normalization handles one exact, EOF-terminated final command without an LF, while preserving the overlong-line drain and strict command/count matching. A genuinely empty EOF still stops and reaps the launched target.
-- Added 21 native Bash/Assembly regression cases for inspection, aliases, help/quit, step/continue, a pending SIGILL and unknown near-miss input. **243 total tests expected**, subject to Ubuntu 22.04/24.04 CI.
-- Upgraded v0.2.15 prerelease publishing workflow to require both supported Ubuntu test runners before releasing binaries and checksums. Also repeats the native suite during packaging.
-- Development is not published; v0.2.14 remains the latest verified experimental release, with no reverse execution, trace recording or process attach.
+- Native NASM `until-exec` / `v` pauses at the next confirmed ptrace exec event; refreshes registers, resets the RIP-history ring for the new image and leaves the tracee stopped for read-only inspection or explicit stepping.
+- Intermediate genuine application signals continue to be forwarded normally, while synthetic ptrace exec traps do not become user signal entries. Validated exec event counter increments once.
+- Added **16** Python-free Bash/native Assembly integration scenarios, targeting **259** total tests. GitHub Actions validation and prerelease publication are pending; all changes are experimental Linux x86-64 only.
+
+## v0.2.15 EOF-safe interactive command input — 2026-10-23 (experimental prerelease published)
+
+- **Published:** [v0.2.15](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.15) through merged [PR #27](https://github.com/sanskarIN/Rewind64/pull/27). All 243 native tests passed on Ubuntu 22.04 and 24.04 at [PR head](https://github.com/sanskarIN/Rewind64/actions/runs/39917140384), and the [guarded release workflow](https://github.com/sanskarIN/Rewind64/actions/runs/39919770031) succeeded with both Ubuntu verification jobs plus the packaging job.
+- Short exact input commands without final LF now dispatch normally, with safe EOF cleanup and strict 62-byte input boundary. Release assets include the Linux x86-64 archive and SHA-256 checksum.
+- Still forward-only, single launched tracee, with no stable release, attach, trace recording or replay.
 
 ## v0.2.14 machine-readable capabilities — 2026-10-23 (experimental prerelease published)
 

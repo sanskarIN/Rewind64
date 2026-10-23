@@ -5,7 +5,7 @@ set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 BIN="$ROOT/build/rewind64"
-EXPECTED_VERSION="0.2.15-pre" # canonical expected version for CLI and JSON test checks
+EXPECTED_VERSION="0.2.16-pre" # canonical expected version for CLI and JSON test checks
 tmp="$(mktemp -d)"
 trap 'rm -rf -- "$tmp"' EXIT
 
@@ -77,6 +77,7 @@ capabilities_json() {
   assert_contains capabilities_json '"modes": ["bounded-step", "observe-only", "interactive"]' &&
   assert_contains capabilities_json '"max_cli_steps": 64' &&
   assert_contains capabilities_json '"max_interactive_step_batch": 16' &&
+  assert_contains capabilities_json '"stop_on_exec": true' &&
   assert_contains capabilities_json '"signal_history_tail": true' &&
   assert_contains capabilities_json '"signal_history_max": 8' &&
   assert_contains capabilities_json '"memory_words_max": 4' &&
@@ -94,6 +95,7 @@ capabilities_json() {
         .version == $expected_version and
         .execution.max_cli_steps == 64 and
         .execution.max_interactive_step_batch == 16 and
+        .execution.stop_on_exec == true and
         .inspection.signal_history_tail == true and
         .limitations.forward_only == true and
         .limitations.recording == false and
@@ -1087,6 +1089,114 @@ signal_history_forward() {
   assert_contains signal_history_forward 'Target terminated by signal 4'
 }
 # v0.2.12: resume to the next genuine signal without consuming it.
+# v0.2.16: explicit pause on a genuine ptrace exec event.
+until_exec_basic() {
+  assert_count until_exec_basic 'Ptrace exec event:' 1 &&
+  assert_count until_exec_basic 'Interactive exec stop:' 1 &&
+  assert_contains until_exec_basic 'exec_events=1 exit_events=0' &&
+  assert_count until_exec_basic 'RIP history [' 1 &&
+  assert_contains until_exec_basic 'RIP history [0]:' &&
+  assert_contains until_exec_basic ' step=0' &&
+  assert_contains until_exec_basic 'steps=0 pending_signal=0' &&
+  assert_contains until_exec_basic 'Target exited with status 42' &&
+  assert_contains until_exec_basic 'Signals forwarded: 0'
+}
+until_exec_alias() {
+  assert_count until_exec_alias 'Interactive exec stop:' 1 &&
+  assert_count until_exec_alias '    GPR:' 3 &&
+  assert_contains until_exec_alias 'Target exited with status 42'
+}
+until_exec_step() {
+  assert_count until_exec_step 'Interactive exec stop:' 1 &&
+  assert_count until_exec_step 'After step:' 2 &&
+  assert_count until_exec_step 'RIP history [' 3 &&
+  assert_contains until_exec_step 'RIP history [2]:' &&
+  assert_contains until_exec_step 'Interactive steps completed: 2' &&
+  assert_contains until_exec_step 'Target exited with status 42'
+}
+until_exec_inspect() {
+  assert_count until_exec_inspect 'Interactive exec stop:' 1 &&
+  assert_count until_exec_inspect 'Code word at RIP=' 1 &&
+  assert_count until_exec_inspect 'Instruction byte [+' 4 &&
+  assert_contains until_exec_inspect 'steps=0 pending_signal=0' &&
+  assert_contains until_exec_inspect 'Signals forwarded: 0' &&
+  assert_not_running until_exec_inspect
+}
+until_exec_no_event() {
+  assert_count until_exec_no_event 'Interactive exec stop:' 0 &&
+  assert_contains until_exec_no_event 'Target exited with status 7' &&
+  assert_contains until_exec_no_event 'Ptrace events: exec=0 exit=1'
+}
+until_exec_signals() {
+  assert_count until_exec_signals 'Interactive exec stop:' 0 &&
+  assert_count until_exec_signals 'Signal-delivery stop: signal 10' 2 &&
+  assert_contains until_exec_signals 'Signals forwarded: 2' &&
+  assert_contains until_exec_signals 'Target exited with status 0'
+}
+until_exec_fault() {
+  assert_count until_exec_fault 'Interactive exec stop:' 0 &&
+  assert_contains until_exec_fault 'Target terminated by signal 4' &&
+  assert_contains until_exec_fault 'Signals forwarded: 1'
+}
+until_exec_pending() {
+  assert_contains until_exec_pending 'Interactive signal stop: signal 4 pending' &&
+  assert_count until_exec_pending 'Interactive exec stop:' 0 &&
+  assert_contains until_exec_pending 'Signals forwarded: 1' &&
+  assert_contains until_exec_pending 'Target terminated by signal 4'
+}
+until_exec_invalid() {
+  assert_count until_exec_invalid 'Unknown session command. Type help.' 5 &&
+  assert_count until_exec_invalid 'Interactive exec stop:' 0 &&
+  assert_contains until_exec_invalid 'steps=0 pending_signal=0' &&
+  assert_not_running until_exec_invalid
+}
+until_exec_eof() {
+  assert_count until_exec_eof 'Interactive exec stop:' 1 &&
+  assert_contains until_exec_eof 'Interactive session ended;' &&
+  assert_contains until_exec_eof 'Signals forwarded: 0' &&
+  assert_not_running until_exec_eof
+}
+until_exec_alias_eof() {
+  assert_count until_exec_alias_eof 'Interactive exec stop:' 1 &&
+  assert_contains until_exec_alias_eof 'Interactive session ended;' &&
+  assert_not_running until_exec_alias_eof
+}
+until_exec_compact() {
+  assert_count until_exec_compact '    GPR:' 0 &&
+  assert_count until_exec_compact 'Interactive exec stop:' 1 &&
+  assert_contains until_exec_compact 'exec_events=1 exit_events=0' &&
+  assert_count until_exec_compact 'RIP history [' 1 &&
+  assert_not_running until_exec_compact
+}
+until_exec_repeated() {
+  assert_count until_exec_repeated 'Interactive exec stop:' 1 &&
+  assert_contains until_exec_repeated 'Target exited with status 42' &&
+  assert_contains until_exec_repeated 'Signals forwarded: 0'
+}
+until_exec_first_step() {
+  assert_count until_exec_first_step 'Interactive exec stop:' 1 &&
+  assert_count until_exec_first_step 'After step:' 1 &&
+  assert_contains until_exec_first_step 'Interactive steps completed: 1' &&
+  assert_contains until_exec_first_step 'Signals forwarded: 0' &&
+  assert_not_running until_exec_first_step
+}
+until_exec_real_int3() {
+  assert_count until_exec_real_int3 'Interactive exec stop:' 1 &&
+  assert_count until_exec_real_int3 'After step:' 1 &&
+  assert_contains until_exec_real_int3 'Interactive signal stop: signal 5 pending' &&
+  assert_contains until_exec_real_int3 'steps=1 observed_signals=1 forwarded_signals=0 pending_signal=5' &&
+  assert_contains until_exec_real_int3 'Target terminated by signal 5' &&
+  assert_contains until_exec_real_int3 'Signals forwarded: 1'
+}
+until_exec_history_reset() {
+  assert_count until_exec_history_reset 'After step:' 2 &&
+  assert_count until_exec_history_reset 'Interactive exec stop:' 1 &&
+  assert_count until_exec_history_reset 'RIP history [' 1 &&
+  assert_contains until_exec_history_reset 'RIP history [0]:' &&
+  assert_contains until_exec_history_reset ' step=2' &&
+  assert_contains until_exec_history_reset 'Target exited with status 42'
+}
+
 until_handled_twice() {
   assert_contains until_handled_twice 'Target exited with status 0' &&
   assert_count until_handled_twice 'Interactive signal stop: signal 10 pending' 2 &&
@@ -1486,6 +1596,24 @@ printf 'u\nevents\nsignals\nhistory 1\nstatus\nquit\n' > "$tmp/until-inspect-pen
 printf 'u\nstep\n' > "$tmp/until-step-pending"
 printf 'u\ncontinue\n' > "$tmp/until-continue-pending"
 
+# v0.2.16 stop at real exec events; synthetic events are never forwarded.
+printf 'until-exec\nevents\nhistory\nstatus\ncontinue\n' > "$tmp/until-exec-basic"
+printf 'v\nregs\ncontinue\n' > "$tmp/until-exec-alias"
+printf 'v\nstep 2\nhistory 3\ncontinue\n' > "$tmp/until-exec-step"
+printf 'until-exec\ncode\nbytes 4\nstatus\nquit\n' > "$tmp/until-exec-inspect"
+printf 'until-exec\n' > "$tmp/until-exec-no-event"
+printf 'v\n' > "$tmp/until-exec-signals"
+printf 'until-exec\n' > "$tmp/until-exec-fault"
+printf 'step\nv\n' > "$tmp/until-exec-pending"
+printf 'until-exec 1\nv 1\nUNTIL-EXEC\nV\nuntil-exec?\nstatus\nquit\n' > "$tmp/until-exec-invalid"
+printf 'until-exec' > "$tmp/until-exec-eof"
+printf 'v' > "$tmp/until-exec-alias-eof"
+printf 'v\nevents\nhistory\nquit\n' > "$tmp/until-exec-compact"
+printf 'v\nv\n' > "$tmp/until-exec-repeated"
+printf 'step 2\nv\nhistory\ncontinue\n' > "$tmp/until-exec-history-reset"
+printf 'v\nstep 1\nquit\n' > "$tmp/until-exec-first-step"
+printf 'v\nstep 2\nevents\ncontinue\n' > "$tmp/until-exec-real-int3"
+
 # v0.2.13 filtered signal-stop view scripts.
 printf 'signals 4\nstatus\nquit\n' > "$tmp/signal-tail-empty"
 printf 'g 3\nquit\n' > "$tmp/signal-tail-alias-empty"
@@ -1683,6 +1811,22 @@ check signal_history_unknown 0 session_exec "$tmp/signal-history-unknown" "$BIN"
 check signal_history_eof 0 session_exec "$tmp/signal-history-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check signal_history_alias_eof 0 session_exec "$tmp/signal-history-alias-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check signal_history_forward 132 session_exec "$tmp/signal-history-forward" "$BIN" run --interactive "$ROOT/build/illegal"
+check until_exec_basic 42 session_exec "$tmp/until-exec-basic" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_exec_alias 42 session_exec "$tmp/until-exec-alias" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_exec_step 42 session_exec "$tmp/until-exec-step" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_exec_inspect 0 session_exec "$tmp/until-exec-inspect" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_exec_no_event 7 session_exec "$tmp/until-exec-no-event" "$BIN" run --interactive "$ROOT/build/exit7"
+check until_exec_signals 0 session_exec "$tmp/until-exec-signals" "$BIN" run --interactive "$ROOT/build/handled_signal"
+check until_exec_fault 132 session_exec "$tmp/until-exec-fault" "$BIN" run --interactive "$ROOT/build/illegal"
+check until_exec_pending 132 session_exec "$tmp/until-exec-pending" "$BIN" run --interactive "$ROOT/build/illegal"
+check until_exec_invalid 0 session_exec "$tmp/until-exec-invalid" "$BIN" run --interactive "$ROOT/build/long_steps"
+check until_exec_eof 0 session_exec "$tmp/until-exec-eof" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_exec_alias_eof 0 session_exec "$tmp/until-exec-alias-eof" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_exec_compact 0 session_exec "$tmp/until-exec-compact" "$BIN" run --interactive --changes-only "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_exec_repeated 42 session_exec "$tmp/until-exec-repeated" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_exec_history_reset 42 session_exec "$tmp/until-exec-history-reset" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_exec_first_step 0 session_exec "$tmp/until-exec-first-step" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/exit42"
+check until_exec_real_int3 133 session_exec "$tmp/until-exec-real-int3" "$BIN" run --interactive "$ROOT/build/reexec" "$ROOT/build/trap"
 check until_handled_twice 0 session_exec "$tmp/until-handled-twice" "$BIN" run --interactive "$ROOT/build/handled_signal"
 check until_burst_ring 0 session_exec "$tmp/until-burst-ring" "$BIN" run --interactive "$ROOT/build/signal_burst"
 check until_burst_repeat_read 0 session_exec "$tmp/until-burst-repeat" "$BIN" run --interactive "$ROOT/build/signal_burst"

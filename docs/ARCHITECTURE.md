@@ -18,6 +18,18 @@ This makes bare `regs`, `status`, `code`, `stack`, `bytes`, `history`, `help`, `
 
 The development v0.2.15 prerelease publishing workflow adds a **two-runner verify matrix** for Ubuntu 22.04/24.04 with `needs: verify` on the publishing job. A failure on either runner blocks packaging and release publication, independent of branch PR checks. The publishing runner repeats `make clean && make test` to verify the exact packaged source.
 
+## v0.2.16 opt-in exec-event stops (development)
+
+Interactive `until-exec` / `v` sets `WAIT_NEXT_EXEC` in the last available disjoint dword of the existing aligned 1344-byte debugger stack frame (`rbp-1344`). It explicitly disables `WAIT_NEXT_SIGNAL` and cancels any pending interactive step batch. Normal `PTRACE_CONT` resumes to kernel stops; validated application signal-delivery stops are counted and forwarded normally, without interrupting the opt-in exec watch. Exec and exit event numbers remain classified independently of application SIGTRAP.
+
+At a real `PTRACE_EVENT_EXEC`, the debugger increments the exec-event counter, emits the existing event diagnostic and **pauses only when `WAIT_NEXT_EXEC` is armed**. It clears the armed flag and pending-signal slot, refreshes all 216 bytes of Linux x86-64 registers with `PTRACE_GETREGS`, copies the current state into the baseline `PREVREGS`, clears the 16-entry RIP ring and records the **new image's RIP** labeled with the cumulative verified step count. A later user step therefore compares registers from the same executable image, not stale ones. Previous image RIPs are discarded for this opt-in transition; there is no persistent trace and no replay. At EOF or `quit`, the tracee is terminated and reaped without any synthetic signal injection. If no exec event occurs, the target exits or signals normally with actual process status. Ordinary `continue`, `until-signal`, bounded automatic stepping and non-interactive observation remain unchanged.
+
+Fixed input matching rejects arguments or case variants such as `until-exec 1` and `V`; a final command without LF is already normalized by v0.2.15. The 16 new native Bash/NASM regression scenarios cover real exec, alias, inspection, stepping, old-image history clearing, signals before exec, pending faults, no-exec termination, extra arguments, compact output and EOF. **259 total expected**, awaiting dual-Ubuntu CI.
+
+### First single-step after an exec event
+
+Linux may report a synthetic `TRAP_BRKPT` with **unchanged RIP** on the first single-step requested immediately after a genuine `PTRACE_EVENT_EXEC`. The debugger's `WAIT_NEXT_EXEC` state has values `0=off`, `1=awaiting exec`, `2=first post-exec step` and `3=one redundant stop already consumed`. For that narrowly scoped first step, Rewind64 checks the previous instruction bytes and rejects actual INT3 (`cc`), `INT 3` (`cd 03`) and ICEBP (`f1`) as synthetic steps. If the RIP has not advanced and the state is 2, it retries exactly **one** `PTRACE_SINGLESTEP` with signal zero; the redundant stop is not counted or forwarded. A second unchanged-RIP trap is not retried. Only successful verified instruction completion increments the step count, and real signal-delivery stops still follow the existing pending-signal rules. The new regression suite separately proves that a genuine INT3 *after* the first instruction is delivered to the application.
+
 ## Debugger state machine
 
 1. `fork()` once; child requests `PTRACE_TRACEME` and calls `execvp` with the caller-provided argument vector.
