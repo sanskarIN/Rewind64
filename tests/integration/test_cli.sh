@@ -65,12 +65,12 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.14-pre'; }
+version() { assert_contains version 'v0.2.15-pre'; }
 # v0.2.14 static machine-readable CLI metadata; must not fork a traced target.
 capabilities_json() {
   [[ "${output:0:1}" == "{" ]] &&
   assert_contains capabilities_json '"schema": 1' &&
-  assert_contains capabilities_json '"version": "0.2.14-pre"' &&
+  assert_contains capabilities_json '"version": "0.2.15-pre"' &&
   assert_contains capabilities_json '"platform": "linux-x86_64"' &&
   assert_contains capabilities_json '"debug_backend": "ptrace"' &&
   assert_contains capabilities_json '"modes": ["bounded-step", "observe-only", "interactive"]' &&
@@ -105,7 +105,7 @@ capabilities_json() {
 capabilities_repeat() {
   [[ "${output:0:1}" == "{" ]] &&
   assert_count capabilities_repeat '"schema": 1' 1 &&
-  assert_count capabilities_repeat '"version": "0.2.14-pre"' 1 &&
+  assert_count capabilities_repeat '"version": "0.2.15-pre"' 1 &&
   assert_count capabilities_repeat 'Initial stop:' 0
 }
 capabilities_invalid() {
