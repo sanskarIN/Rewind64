@@ -81,6 +81,8 @@ extern stdout
 %define SIGNAL_RING_PRINT  (-1324)   ; chronological print index (dword)
 %define SIGNAL_RING_START  (-1328)   ; oldest record when full (dword)
 %define WAIT_NEXT_SIGNAL   (-1332)   ; interactive PTRACE_CONT-to-next-signal mode
+%define SIGNAL_RING_LIMIT  (-1336)   ; requested tail count, clamped to stored stops
+%define SIGNAL_RING_SKIP   (-1340)   ; entries to skip from retained oldest stop
 %define SIGNAL_RING_CAPACITY 8
 %define SIGKILL            9
 %define SIGTRAP            5
@@ -96,9 +98,10 @@ extern stdout
 
 section .rodata
     msg_initial:   db 'Initial stop: pid=%ld RIP=0x%016lx RSP=0x%016lx', 10, 0
-    msg_session_intro: db 'Interactive session: step [1..16] | until-signal | history [1..16] | events | signals | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
+    msg_session_intro: db 'Interactive session: step [1..16] | until-signal | history [1..16] | events | signals [1..8] | regs | status | code | bytes [1..8] | stack | mem 0xHEX [1..4] | continue | help | quit', 0
     msg_signal_history_entry: db 'Signal history [%u]: signal=%u si_code=%d step=%u', 10, 0
     msg_signal_history_empty: db 'Signal history: no validated signal-delivery stops yet.', 0
+    msg_signal_history_usage: db 'Usage: signals [1..8] or g [1..8] (show latest N; default all retained)', 0
     msg_lifecycle: db 'Lifecycle: pid=%ld steps=%u observed_signals=%u forwarded_signals=%u pending_signal=%u exec_events=%u exit_events=%u', 10, 0
     msg_last_stop: db 'Last signal stop: signal=%u si_code=%d', 10, 0
     msg_history_entry: db 'RIP history [%u]: 0x%016lx step=%u', 10, 0
@@ -193,8 +196,8 @@ section .text
 ; Prompt control and memory words at -752..-677, text input at -832..-769.
 ;; RIP history ring at -1024..-897; matching step-number ring at
 ; -1152..-1025. A separate 8 x 16-byte signal-stop ring lives at
-; -1312..-1185, with metadata -1332..-1313 (including the v0.2.12
-; until-signal session flag). Its slots do not overlap
+; -1312..-1185, with metadata -1340..-1313 (including until-signal
+; state and a bounded filtered-view limit/skip). Its slots do not overlap
 ; metadata -1172..-1153, command input, register state or siginfo.
 debug_run:
     push rbp
@@ -681,6 +684,53 @@ debug_run:
     call strcmp
     test eax, eax
     jz .session_signals
+    ; Optional last-N selection for the eight most recent valid signal stops.
+    ; Recognize 'signals ' and 'g ' only; reject malformed counts without
+    ; reading ptrace state, resuming, or forwarding a pending signal.
+    lea rsi, [rbp+SESSION_BUFFER]
+    cmp byte [rsi], 'g'
+    je .session_signals_check_short
+    cmp byte [rsi], 's'
+    jne .session_not_signals_count
+    cmp byte [rsi+1], 'i'
+    jne .session_not_signals_count
+    cmp byte [rsi+2], 'g'
+    jne .session_not_signals_count
+    cmp byte [rsi+3], 'n'
+    jne .session_not_signals_count
+    cmp byte [rsi+4], 'a'
+    jne .session_not_signals_count
+    cmp byte [rsi+5], 'l'
+    jne .session_not_signals_count
+    cmp byte [rsi+6], 's'
+    jne .session_not_signals_count
+    cmp byte [rsi+7], ' '
+    jne .session_not_signals_count
+    add rsi, 8
+    jmp .session_signals_parse_count
+.session_signals_check_short:
+    cmp byte [rsi+1], ' '
+    jne .session_not_signals_count
+    add rsi, 2
+.session_signals_parse_count:
+    ; Exactly one ASCII decimal digit, 1..8, then newline or EOF.
+    movzx eax, byte [rsi]
+    cmp al, '1'
+    jb .session_signals_usage
+    cmp al, '8'
+    ja .session_signals_usage
+    sub eax, '0'
+    mov dword [rbp+SIGNAL_RING_LIMIT], eax
+    inc rsi
+    cmp byte [rsi], 10
+    je .session_signals_bounded
+    cmp byte [rsi], 0
+    je .session_signals_bounded
+.session_signals_usage:
+    lea rdi, [rel msg_signal_history_usage]
+    call puts
+    jmp .session_prompt
+.session_not_signals_count:
     ; Opt-in continue-until-next-real-signal mode. Unlike 'continue',
     ; this mode returns to the prompt at a validated delivery stop.
     lea rdi, [rbp+SESSION_BUFFER]
@@ -794,15 +844,28 @@ debug_run:
     call printf
     jmp .session_prompt
 .session_signals:
-    ; Show only successfully classified signal-delivery stops. This
-    ; history does not include synthetic traps, and never resumes the
-    ; tracee or forwards a pending signal.
+    mov eax, [rbp+SIGNAL_RING_COUNT]
+    mov dword [rbp+SIGNAL_RING_LIMIT], eax
+.session_signals_bounded:
+    ; Only validated signal-delivery stops are retained. Read-only view:
+    ; never resume, inspect target memory, or forward pending signals.
     cmp dword [rbp+SIGNAL_RING_COUNT], 0
     jne .signals_have_entries
     lea rdi, [rel msg_signal_history_empty]
     call puts
     jmp .session_prompt
 .signals_have_entries:
+    ; Select the latest min(N, retained count) stops. Preserve original
+    ; retained-history indices instead of relabeling tail entries as zero.
+    mov eax, [rbp+SIGNAL_RING_COUNT]
+    mov ecx, [rbp+SIGNAL_RING_LIMIT]
+    cmp ecx, eax
+    jbe .signals_limit_ready
+    mov ecx, eax
+    mov dword [rbp+SIGNAL_RING_LIMIT], ecx
+.signals_limit_ready:
+    sub eax, ecx
+    mov dword [rbp+SIGNAL_RING_SKIP], eax
     mov dword [rbp+SIGNAL_RING_PRINT], 0
     mov dword [rbp+SIGNAL_RING_START], 0
     cmp dword [rbp+SIGNAL_RING_COUNT], SIGNAL_RING_CAPACITY
@@ -811,13 +874,15 @@ debug_run:
     mov dword [rbp+SIGNAL_RING_START], eax
 .signals_next:
     mov eax, [rbp+SIGNAL_RING_PRINT]
-    cmp eax, [rbp+SIGNAL_RING_COUNT]
+    cmp eax, [rbp+SIGNAL_RING_LIMIT]
     jae .session_prompt
     add eax, [rbp+SIGNAL_RING_START]
+    add eax, [rbp+SIGNAL_RING_SKIP]
     and eax, SIGNAL_RING_CAPACITY - 1
     shl eax, 4                  ; 16 bytes per signal record
     lea rdi, [rel msg_signal_history_entry]
     mov esi, [rbp+SIGNAL_RING_PRINT]
+    add esi, [rbp+SIGNAL_RING_SKIP]
     mov edx, [rbp+SIGNAL_RING+rax]
     mov ecx, [rbp+SIGNAL_RING+rax+4]
     mov r8d, [rbp+SIGNAL_RING+rax+8]

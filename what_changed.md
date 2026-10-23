@@ -1,5 +1,12 @@
 # Rewind64 development progress
 
+## v0.2.13 bounded signal history views — 2026-10-23 (development; not published)
+
+- **Work in progress:** native NASM `signals [N]` / `g [N]` selects the latest N=1..8 retained valid signal-delivery stops, while bare commands show the complete retained eight-slot ring. Indices remain truthful after wraparound.
+- Two bounded display metadata dwords use free space within the existing aligned debugger stack frame. Filtering does not modify the tracee, advance execution, inspect target registers/memory, or forward a pending signal.
+- Added **13** Python-free Bash/native Assembly black-box cases for wrapped ten-event signal history, empty and pending signals, invalid counts, aliases, EOF without a newline and compact mode. **217 total tests expected; CI not yet confirmed.**
+- Preserve the existing published v0.2.12 release and its assets pending review and passing CI for the next experimental prerelease. Continue to avoid any stable, replay or reverse-debugging claims.
+
 ## v0.2.12 repeatable stop-on-signal — 2026-10-20 (experimental prerelease published)
 
 - **Published:** [v0.2.12 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.12), merged through [PR #22](https://github.com/sanskarIN/Rewind64/pull/22) after 12 focused development commits using `sanskarin@outlook.in`.

@@ -65,7 +65,7 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.12-pre'; }
+version() { assert_contains version 'v0.2.13-pre'; }
 unsupported() { assert_contains unsupported 'unsupported command'; }
 usage() { assert_contains usage 'Error:'; }
 zero() {
@@ -1122,6 +1122,89 @@ until_continue_pending() {
   assert_contains until_continue_pending 'Signals forwarded: 1' &&
   assert_contains until_continue_pending 'Target terminated by signal 4'
 }
+
+# v0.2.13: bounded last-N views over the existing validated signal ring.
+signal_tail_empty() {
+  assert_count signal_tail_empty 'Signal history: no validated signal-delivery stops yet.' 1 &&
+  assert_count signal_tail_empty 'Signal history [' 0 &&
+  assert_contains signal_tail_empty 'steps=0 pending_signal=0' &&
+  assert_not_running signal_tail_empty
+}
+signal_tail_alias_empty() {
+  assert_count signal_tail_alias_empty 'Signal history: no validated signal-delivery stops yet.' 1 &&
+  assert_not_running signal_tail_alias_empty
+}
+signal_tail_pending() {
+  assert_count signal_tail_pending 'Signal history [' 1 &&
+  assert_contains signal_tail_pending 'Signal history [0]: signal=4 si_code=' &&
+  assert_contains signal_tail_pending 'observed_signals=1 forwarded_signals=0 pending_signal=4' &&
+  assert_not_running signal_tail_pending
+}
+signal_tail_clamp() {
+  assert_count signal_tail_clamp 'Signal history [' 1 &&
+  assert_contains signal_tail_clamp 'Signal history [0]: signal=4 si_code=' &&
+  assert_not_running signal_tail_clamp
+}
+signal_tail_full() {
+  assert_count signal_tail_full 'Signal history [' 8 &&
+  assert_contains signal_tail_full 'Signal history [0]: signal=10 si_code=0 step=0' &&
+  assert_contains signal_tail_full 'Signal history [7]: signal=10 si_code=0 step=0' &&
+  assert_contains signal_tail_full 'observed_signals=10 forwarded_signals=9 pending_signal=10' &&
+  assert_not_running signal_tail_full
+}
+signal_tail_wrap_three() {
+  assert_count signal_tail_wrap_three 'Signal history [' 3 &&
+  assert_contains signal_tail_wrap_three 'Signal history [5]: signal=10 si_code=0 step=0' &&
+  assert_contains signal_tail_wrap_three 'Signal history [6]: signal=10 si_code=0 step=0' &&
+  assert_contains signal_tail_wrap_three 'Signal history [7]: signal=10 si_code=0 step=0' &&
+  assert_count signal_tail_wrap_three 'Signal history [0]:' 0 &&
+  assert_contains signal_tail_wrap_three 'observed_signals=10 forwarded_signals=9 pending_signal=10' &&
+  assert_not_running signal_tail_wrap_three
+}
+signal_tail_wrap_alias() {
+  assert_count signal_tail_wrap_alias 'Signal history [' 2 &&
+  assert_contains signal_tail_wrap_alias 'Signal history [6]: signal=10 si_code=0 step=0' &&
+  assert_contains signal_tail_wrap_alias 'Signal history [7]: signal=10 si_code=0 step=0' &&
+  assert_count signal_tail_wrap_alias 'Signal history [0]:' 0 &&
+  assert_not_running signal_tail_wrap_alias
+}
+signal_tail_invalid() {
+  assert_count signal_tail_invalid 'Usage: signals [1..8] or g [1..8]' 12 &&
+  assert_count signal_tail_invalid 'Unknown session command. Type help.' 1 &&
+  assert_count signal_tail_invalid 'Signal history [' 0 &&
+  assert_contains signal_tail_invalid 'steps=0 pending_signal=0' &&
+  assert_not_running signal_tail_invalid
+}
+signal_tail_invalid_pending() {
+  assert_count signal_tail_invalid_pending 'Usage: signals [1..8] or g [1..8]' 3 &&
+  assert_count signal_tail_invalid_pending 'Signal history [' 1 &&
+  assert_contains signal_tail_invalid_pending 'observed_signals=1 forwarded_signals=0 pending_signal=4' &&
+  assert_not_running signal_tail_invalid_pending
+}
+signal_tail_nonmutating() {
+  assert_contains signal_tail_nonmutating 'Target exited with status 0' &&
+  assert_count signal_tail_nonmutating 'Signal history [' 4 &&
+  assert_count signal_tail_nonmutating 'Signal history [1]: signal=10 si_code=0 step=0' 3 &&
+  assert_contains signal_tail_nonmutating 'observed_signals=2 forwarded_signals=1 pending_signal=10' &&
+  assert_contains signal_tail_nonmutating 'Signals forwarded: 2'
+}
+signal_tail_eof() {
+  assert_contains signal_tail_eof 'Signal history: no validated signal-delivery stops yet.' &&
+  assert_contains signal_tail_eof 'Interactive session ended;' &&
+  assert_not_running signal_tail_eof
+}
+signal_tail_alias_eof() {
+  assert_contains signal_tail_alias_eof 'Signal history: no validated signal-delivery stops yet.' &&
+  assert_contains signal_tail_alias_eof 'Interactive session ended;' &&
+  assert_not_running signal_tail_alias_eof
+}
+signal_tail_compact() {
+  assert_count signal_tail_compact '    GPR:' 0 &&
+  assert_count signal_tail_compact 'Signal history [' 1 &&
+  assert_contains signal_tail_compact 'observed_signals=1 forwarded_signals=0 pending_signal=4' &&
+  assert_not_running signal_tail_compact
+}
+
 session_code() {
   assert_contains session_code 'Code word at RIP=0x' &&
   assert_contains session_code 'Target exited with status 42' &&
@@ -1282,7 +1365,7 @@ printf 'step\nstep\nsignals\nquit\n' > "$tmp/signal-history-trap"
 printf 'step 16\nsignals\nquit\n' > "$tmp/signal-history-batch"
 printf 'code\nbytes 2\nhistory 1\nsignals\nquit\n' > "$tmp/signal-history-inspection"
 printf 'step\nsignals\nevents\nquit\n' > "$tmp/signal-history-compact"
-printf 'signals 1\ng 1\nSIGNALS\nsignalz\nquit\n' > "$tmp/signal-history-unknown"
+printf 'signalsx\ng1\nSIGNALS\nsignalz\nquit\n' > "$tmp/signal-history-unknown"
 printf 'signals' > "$tmp/signal-history-eof"
 printf 'g' > "$tmp/signal-history-alias-eof"
 printf 'step\nsignals\ncontinue\n' > "$tmp/signal-history-forward"
@@ -1308,6 +1391,29 @@ printf 'u\nsignals\nevents\nquit\n' > "$tmp/until-compact"
 printf 'u\nevents\nsignals\nhistory 1\nstatus\nquit\n' > "$tmp/until-inspect-pending"
 printf 'u\nstep\n' > "$tmp/until-step-pending"
 printf 'u\ncontinue\n' > "$tmp/until-continue-pending"
+
+# v0.2.13 filtered signal-stop view scripts.
+printf 'signals 4\nstatus\nquit\n' > "$tmp/signal-tail-empty"
+printf 'g 3\nquit\n' > "$tmp/signal-tail-alias-empty"
+printf 'step\nsignals 1\nevents\nquit\n' > "$tmp/signal-tail-pending"
+printf 'step\ng 8\nquit\n' > "$tmp/signal-tail-clamp"
+: > "$tmp/signal-tail-full"
+: > "$tmp/signal-tail-wrap-three"
+: > "$tmp/signal-tail-wrap-alias"
+for ((n=0;n<10;n++)); do
+  printf 'u\n' >> "$tmp/signal-tail-full"
+  printf 'u\n' >> "$tmp/signal-tail-wrap-three"
+  printf 'u\n' >> "$tmp/signal-tail-wrap-alias"
+done
+printf 'signals 8\nevents\nquit\n' >> "$tmp/signal-tail-full"
+printf 'signals 3\nevents\nquit\n' >> "$tmp/signal-tail-wrap-three"
+printf 'g 2\nquit\n' >> "$tmp/signal-tail-wrap-alias"
+printf 'signals 0\nsignals 9\nsignals 10\nsignals 01\nsignals -1\nsignals 1x\nsignals 1 \nsignals \ng 0\ng 9\ng +1\ng 00\ng1\nstatus\nquit\n' > "$tmp/signal-tail-invalid"
+printf 'step\nsignals 0\ng 9\nsignals 10\nsignals 1\nevents\nquit\n' > "$tmp/signal-tail-invalid-pending"
+printf 'u\nu\nsignals 1\nsignals 2\ng 1\nevents\nu\n' > "$tmp/signal-tail-nonmutating"
+printf 'signals 2' > "$tmp/signal-tail-eof"
+printf 'g 1' > "$tmp/signal-tail-alias-eof"
+printf 'u\ng 1\nevents\nquit\n' > "$tmp/signal-tail-compact"
 
 # Resolve addresses from symbols in the native ELF fixtures.
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
@@ -1468,6 +1574,19 @@ check until_compact 0 session_exec "$tmp/until-compact" "$BIN" run --interactive
 check until_inspect_pending 0 session_exec "$tmp/until-inspect-pending" "$BIN" run --interactive "$ROOT/build/illegal"
 check until_step_pending 132 session_exec "$tmp/until-step-pending" "$BIN" run --interactive "$ROOT/build/illegal"
 check until_continue_pending 132 session_exec "$tmp/until-continue-pending" "$BIN" run --interactive "$ROOT/build/illegal"
+check signal_tail_empty 0 session_exec "$tmp/signal-tail-empty" "$BIN" run --interactive "$ROOT/build/long_steps"
+check signal_tail_alias_empty 0 session_exec "$tmp/signal-tail-alias-empty" "$BIN" run --interactive "$ROOT/build/long_steps"
+check signal_tail_pending 0 session_exec "$tmp/signal-tail-pending" "$BIN" run --interactive "$ROOT/build/illegal"
+check signal_tail_clamp 0 session_exec "$tmp/signal-tail-clamp" "$BIN" run --interactive "$ROOT/build/illegal"
+check signal_tail_full 0 session_exec "$tmp/signal-tail-full" "$BIN" run --interactive "$ROOT/build/signal_burst"
+check signal_tail_wrap_three 0 session_exec "$tmp/signal-tail-wrap-three" "$BIN" run --interactive "$ROOT/build/signal_burst"
+check signal_tail_wrap_alias 0 session_exec "$tmp/signal-tail-wrap-alias" "$BIN" run --interactive "$ROOT/build/signal_burst"
+check signal_tail_invalid 0 session_exec "$tmp/signal-tail-invalid" "$BIN" run --interactive "$ROOT/build/long_steps"
+check signal_tail_invalid_pending 0 session_exec "$tmp/signal-tail-invalid-pending" "$BIN" run --interactive "$ROOT/build/illegal"
+check signal_tail_nonmutating 0 session_exec "$tmp/signal-tail-nonmutating" "$BIN" run --interactive "$ROOT/build/handled_signal"
+check signal_tail_eof 0 session_exec "$tmp/signal-tail-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
+check signal_tail_alias_eof 0 session_exec "$tmp/signal-tail-alias-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
+check signal_tail_compact 0 session_exec "$tmp/signal-tail-compact" "$BIN" run --interactive --changes-only "$ROOT/build/illegal"
 check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"

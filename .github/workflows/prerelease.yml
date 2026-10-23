@@ -1,6 +1,6 @@
 name: Publish experimental Linux prerelease
-# Publishes the tested experimental v0.2.12 tag from main once this workflow is merged.
-# The job does not overwrite a pre-existing release; it must pass the full native Linux test suite first.
+# Publishes the tested experimental v0.2.13 tag from main once this workflow is merged.
+# The job does not overwrite a pre-existing release; it must pass the full native Linux test suite first; PR CI verifies both Ubuntu versions.
 on:
   push:
     branches: [main]
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: rewind64-v0.2.12-prerelease
+  group: rewind64-v0.2.13-prerelease
   cancel-in-progress: false
 
 jobs:
@@ -29,24 +29,24 @@ jobs:
         run: make clean && make test
       - name: Package native binary with source license and documentation
         run: |
-          mkdir -p dist/package/rewind64-v0.2.12-linux-x86_64
-          install -m 0755 build/rewind64 dist/package/rewind64-v0.2.12-linux-x86_64/rewind64
-          cp README.md LICENSE dist/package/rewind64-v0.2.12-linux-x86_64/
-          tar -czf dist/rewind64-v0.2.12-linux-x86_64.tar.gz -C dist/package rewind64-v0.2.12-linux-x86_64
-          (cd dist && sha256sum rewind64-v0.2.12-linux-x86_64.tar.gz > SHA256SUMS.txt)
+          mkdir -p dist/package/rewind64-v0.2.13-linux-x86_64
+          install -m 0755 build/rewind64 dist/package/rewind64-v0.2.13-linux-x86_64/rewind64
+          cp README.md LICENSE dist/package/rewind64-v0.2.13-linux-x86_64/
+          tar -czf dist/rewind64-v0.2.13-linux-x86_64.tar.gz -C dist/package rewind64-v0.2.13-linux-x86_64
+          (cd dist && sha256sum rewind64-v0.2.13-linux-x86_64.tar.gz > SHA256SUMS.txt)
           cat dist/SHA256SUMS.txt
-      - name: Publish v0.2.12 prerelease
+      - name: Publish v0.2.13 prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.2.12 >/dev/null 2>&1; then
-            echo "v0.2.12 already published; will not overwrite it."
+          if gh release view v0.2.13 >/dev/null 2>&1; then
+            echo "v0.2.13 already published; will not overwrite it."
             exit 0
           fi
-          gh release create v0.2.12 \
-            dist/rewind64-v0.2.12-linux-x86_64.tar.gz \
+          gh release create v0.2.13 \
+            dist/rewind64-v0.2.13-linux-x86_64.tar.gz \
             dist/SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
-            --title "Rewind64 v0.2.12 (Linux x86-64 experimental)" \
-            --notes-file docs/releases/v0.2.12.md \
+            --title "Rewind64 v0.2.13 (Linux x86-64 experimental)" \
+            --notes-file docs/releases/v0.2.13.md \
             --prerelease
