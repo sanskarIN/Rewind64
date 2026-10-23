@@ -168,7 +168,7 @@ section .rodata
     msg_exit_detail: db 'Ptrace exit detail: raw_wait=0x%08lx', 10, 0
     msg_event_total: db 'Ptrace events: exec=%u exit=%u', 10, 0
     err_event:      db 'Error: unsupported ptrace event %u', 10, 0
-    msg_other_trap: db 'Unexpected SIGTRAP si_code=%d during step', 10, 0
+    msg_other_trap: db 'Unexpected SIGTRAP si_code=%d during step exec_state=%u prior_RIP=0x%016lx stopped_RIP=0x%016lx', 10, 0
     err_fork:      db 'fork', 0
     err_trace:     db 'ptrace(TRACEME)', 0
     err_exec:      db 'execvp', 0
@@ -1254,8 +1254,15 @@ debug_run:
     jmp .cleanup
 
 .unexpected_trap_code:
+    ; Include debugger state in diagnostics without altering the target.
+    call .get_regs
+    test eax, eax
+    js .regs_failed
     lea rdi, [rel msg_other_trap]
     mov esi, [rbp+SIGINFO+8]
+    mov edx, [rbp+WAIT_NEXT_EXEC]
+    mov rcx, [rbp+PREVREGS+128]
+    mov r8, [rbp+REG_RIP]
     xor eax, eax
     call printf
     jmp .interrupted_step
