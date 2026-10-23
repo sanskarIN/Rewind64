@@ -6,7 +6,7 @@ Rewind64 is an experimental, local-first, open-source native program inspection 
 
 > **Current published release:** [v0.2.15 experimental Linux x86-64 prerelease](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.15), published October 23, 2026. The native NASM debugger accepts EOF-terminated interactive commands consistently, and the publishing workflow requires Ubuntu 22.04 and 24.04 verification. **243/243 native tests passed** on both runners in [PR #27 CI](https://github.com/sanskarIN/Rewind64/actions/runs/39917140384). A Linux archive and SHA-256 checksum file are available. No stable release, recording, replay or reverse stepping is claimed. Debug only programs you own or have permission to inspect.
 
-> **Development milestone v0.2.16-pre (not yet published):** adds `until-exec` / `v` to continue until a real ptrace exec event, then pause with a fresh register snapshot. Signals encountered before that event are forwarded normally, and the previous image's RIP-history ring is replaced by an entry for the new image. Adds 14 native regression cases; **257 expected tests**, subject to Ubuntu CI.
+> **Development milestone v0.2.16-pre (not yet published):** adds `until-exec` / `v` to continue until a real ptrace exec event, then pause with a fresh register snapshot. Signals encountered before that event are forwarded normally, and the previous image's RIP-history ring is replaced by an entry for the new image. Adds 16 native regression cases; **259 expected tests**, subject to Ubuntu CI.
 
 ## Implemented
 
