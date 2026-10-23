@@ -1,11 +1,12 @@
 # Rewind64 development progress
 
-## v0.2.17 bounded non-invasive RIP watch — 2026-10-23 (development; unpublished)
+## v0.2.17 bounded non-invasive RIP watch — 2026-10-23 (experimental prerelease published)
 
-- Implemented `until-rip 0xHEX` in NASM with strict 64-bit hexadecimal address parsing and a maximum of 64 verified single-step completions. No target code is modified, no persistent breakpoint is installed, and the tracee remains a single authorized launched process.
-- A watch stops on target RIP equality, on reaching its finite step cap, on a genuine signal-delivery stop, or on an exec event replacing the original image. Re-exec resets historical RIP baseline and cancels the stale watch.
-- Added 17 Python-free Bash/native Assembly regression tests; **276 total expected**, pending both Ubuntu CI runners. Static capability JSON advertises the watch but still truthfully reports `breakpoints=false`.
-- This contributes a safe precursor to the full software-breakpoint engine tracked in [Issue #25](https://github.com/sanskarIN/Rewind64/issues/25); no experimental prerelease is claimed until tests and packaging complete.
+- **Published:** [v0.2.17](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.17) through merged [PR #30](https://github.com/sanskarIN/Rewind64/pull/30), with all 13 development commits authored/committed as `sanskarin@outlook.in`.
+- Native NASM `until-rip 0xHEX` checks the current RIP, then single-steps at most 64 confirmed instructions to an exact address. No executable code is patched; it is **not** a persistent breakpoint engine.
+- Strict hexadecimal parsing, explicit exhaustion, pending-signal preservation, real INT3 handling and re-exec cancellation are covered by 17 new native Bash/NASM test scenarios.
+- **276/276 Python-free tests passed** on Ubuntu 22.04 and 24.04 in [final PR CI](https://github.com/sanskarIN/Rewind64/actions/runs/39928433952); [release workflow](https://github.com/sanskarIN/Rewind64/actions/runs/39928572687) passed both Ubuntu verification jobs plus packaging. Linux archive and SHA-256 checksum assets published.
+- A true INT3 breakpoint slot registry and re-arm/restore lifecycle remain future work in [Issue #25](https://github.com/sanskarIN/Rewind64/issues/25).
 
 ## v0.2.16 opt-in exec-event pause — 2026-10-23 (experimental prerelease published)
 
