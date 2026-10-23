@@ -38,7 +38,7 @@ section .rodata
                     db '  --changes-only hides repeated full register tables, not CPU deltas.', 10
                     db '  -- ends option parsing (use for programs beginning with --).', 10
                     db 'Only Linux x86-64 run is implemented.', 0
-    version_text:   db 'Rewind64 v0.2.14-pre (Linux x86-64)', 0
+    version_text:   db 'Rewind64 v0.2.15-pre (Linux x86-64)', 0
     usage_error:    db 'Error: expected rewind64 run [--steps N | --observe-only | --interactive] [--changes-only] [--] PROGRAM [ARGS...].', 0
     steps_error:    db 'Error: steps must be in range 1..64 (decimal digits only).', 0
     options_error:  db 'Error: duplicate option; each run flag may be specified once.', 0
@@ -51,7 +51,7 @@ section .rodata
                      db '{', 10
                      db '  "schema": 1,', 10
                      db '  "name": "Rewind64",', 10
-                     db '  "version": "0.2.14-pre",', 10
+                     db '  "version": "0.2.15-pre",', 10
                      db '  "platform": "linux-x86_64",', 10
                      db '  "debug_backend": "ptrace",', 10
                      db '  "execution": {"modes": ["bounded-step", "observe-only", "interactive"], "max_cli_steps": 64, "max_interactive_step_batch": 16},', 10

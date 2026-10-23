@@ -1,6 +1,6 @@
 name: Publish experimental Linux prerelease
-# Publishes the tested experimental v0.2.14 tag from main once this workflow is merged.
-# The job does not overwrite a pre-existing release; it must pass the full native Linux test suite first; PR CI verifies both Ubuntu versions.
+# Publishes the tested experimental v0.2.15 tag from main once this workflow is merged.
+# The workflow requires both supported Ubuntu native suites before packaging and never overwrites an existing release.
 on:
   push:
     branches: [main]
@@ -11,11 +11,32 @@ permissions:
   contents: write
 
 concurrency:
-  group: rewind64-v0.2.14-prerelease
+  group: rewind64-v0.2.15-prerelease
   cancel-in-progress: false
 
 jobs:
+  verify:
+    name: Verify on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install NASM
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nasm
+      - name: Verify canonical Assembly build and integration tests
+        run: make clean && make test
+
   prerelease:
+    needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -29,24 +50,24 @@ jobs:
         run: make clean && make test
       - name: Package native binary with source license and documentation
         run: |
-          mkdir -p dist/package/rewind64-v0.2.14-linux-x86_64
-          install -m 0755 build/rewind64 dist/package/rewind64-v0.2.14-linux-x86_64/rewind64
-          cp README.md LICENSE dist/package/rewind64-v0.2.14-linux-x86_64/
-          tar -czf dist/rewind64-v0.2.14-linux-x86_64.tar.gz -C dist/package rewind64-v0.2.14-linux-x86_64
-          (cd dist && sha256sum rewind64-v0.2.14-linux-x86_64.tar.gz > SHA256SUMS.txt)
+          mkdir -p dist/package/rewind64-v0.2.15-linux-x86_64
+          install -m 0755 build/rewind64 dist/package/rewind64-v0.2.15-linux-x86_64/rewind64
+          cp README.md LICENSE dist/package/rewind64-v0.2.15-linux-x86_64/
+          tar -czf dist/rewind64-v0.2.15-linux-x86_64.tar.gz -C dist/package rewind64-v0.2.15-linux-x86_64
+          (cd dist && sha256sum rewind64-v0.2.15-linux-x86_64.tar.gz > SHA256SUMS.txt)
           cat dist/SHA256SUMS.txt
-      - name: Publish v0.2.14 prerelease
+      - name: Publish v0.2.15 prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.2.14 >/dev/null 2>&1; then
-            echo "v0.2.14 already published; will not overwrite it."
+          if gh release view v0.2.15 >/dev/null 2>&1; then
+            echo "v0.2.15 already published; will not overwrite it."
             exit 0
           fi
-          gh release create v0.2.14 \
-            dist/rewind64-v0.2.14-linux-x86_64.tar.gz \
+          gh release create v0.2.15 \
+            dist/rewind64-v0.2.15-linux-x86_64.tar.gz \
             dist/SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
-            --title "Rewind64 v0.2.14 (Linux x86-64 experimental)" \
-            --notes-file docs/releases/v0.2.14.md \
+            --title "Rewind64 v0.2.15 (Linux x86-64 experimental)" \
+            --notes-file docs/releases/v0.2.15.md \
             --prerelease

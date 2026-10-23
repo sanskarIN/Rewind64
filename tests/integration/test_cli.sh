@@ -5,6 +5,7 @@ set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 BIN="$ROOT/build/rewind64"
+EXPECTED_VERSION="0.2.15-pre" # canonical expected version for CLI and JSON test checks
 tmp="$(mktemp -d)"
 trap 'rm -rf -- "$tmp"' EXIT
 
@@ -65,12 +66,12 @@ check() {
 
 # Each assertion group is a function so Bash conditionals propagate failure safely.
 help() { assert_contains help 'Trace every instruction' && assert_contains help 'run [--steps N | --observe-only | --interactive]' && assert_contains help 'without stepping'; }
-version() { assert_contains version 'v0.2.14-pre'; }
+version() { assert_contains version "v${EXPECTED_VERSION}"; }
 # v0.2.14 static machine-readable CLI metadata; must not fork a traced target.
 capabilities_json() {
   [[ "${output:0:1}" == "{" ]] &&
   assert_contains capabilities_json '"schema": 1' &&
-  assert_contains capabilities_json '"version": "0.2.14-pre"' &&
+  assert_contains capabilities_json "\"version\": \"${EXPECTED_VERSION}\"" &&
   assert_contains capabilities_json '"platform": "linux-x86_64"' &&
   assert_contains capabilities_json '"debug_backend": "ptrace"' &&
   assert_contains capabilities_json '"modes": ["bounded-step", "observe-only", "interactive"]' &&
@@ -88,9 +89,9 @@ capabilities_json() {
   assert_count capabilities_json 'Initial stop:' 0 &&
   assert_count capabilities_json 'Usage:' 0 &&
   { if command -v jq >/dev/null 2>&1; then
-      printf '%s\n' "$output" | jq -e '
+      printf '%s\n' "$output" | jq -e --arg expected_version "$EXPECTED_VERSION" '
         .schema == 1 and
-        .version == "0.2.14-pre" and
+        .version == $expected_version and
         .execution.max_cli_steps == 64 and
         .execution.max_interactive_step_batch == 16 and
         .inspection.signal_history_tail == true and
@@ -105,7 +106,7 @@ capabilities_json() {
 capabilities_repeat() {
   [[ "${output:0:1}" == "{" ]] &&
   assert_count capabilities_repeat '"schema": 1' 1 &&
-  assert_count capabilities_repeat '"version": "0.2.14-pre"' 1 &&
+  assert_count capabilities_repeat "\"version\": \"${EXPECTED_VERSION}\"" 1 &&
   assert_count capabilities_repeat 'Initial stop:' 0
 }
 capabilities_invalid() {
@@ -1255,6 +1256,49 @@ signal_tail_compact() {
   assert_not_running signal_tail_compact
 }
 
+# v0.2.15: a final exact command without LF must dispatch just once.
+eof_regs() { assert_count eof_regs '    GPR:' 2 && assert_contains eof_regs 'Interactive session ended;' && assert_not_running eof_regs; }
+eof_regs_alias() { assert_count eof_regs_alias '    GPR:' 2 && assert_not_running eof_regs_alias; }
+eof_status() { assert_count eof_status 'Session status: pid=' 1 && assert_contains eof_status 'steps=0 pending_signal=0' && assert_not_running eof_status; }
+eof_status_alias() { assert_count eof_status_alias 'Session status: pid=' 1 && assert_not_running eof_status_alias; }
+eof_code() { assert_count eof_code 'Code word at RIP=' 1 && assert_not_running eof_code; }
+eof_code_alias() { assert_count eof_code_alias 'Code word at RIP=' 1 && assert_not_running eof_code_alias; }
+eof_stack() { assert_contains eof_stack 'Stack word [0] at 0x' && assert_not_running eof_stack; }
+eof_stack_alias() { assert_contains eof_stack_alias 'Stack word [0] at 0x' && assert_not_running eof_stack_alias; }
+eof_bytes() { assert_count eof_bytes 'Instruction byte [+' 8 && assert_not_running eof_bytes; }
+eof_bytes_alias() { assert_count eof_bytes_alias 'Instruction byte [+' 8 && assert_not_running eof_bytes_alias; }
+eof_history() { assert_count eof_history 'RIP history [' 1 && assert_contains eof_history ' step=0' && assert_not_running eof_history; }
+eof_history_alias() { assert_count eof_history_alias 'RIP history [' 1 && assert_not_running eof_history_alias; }
+eof_help() { assert_count eof_help 'Interactive session: step' 2 && assert_not_running eof_help; }
+eof_quit() { assert_count eof_quit 'Interactive session ended;' 1 && assert_not_running eof_quit; }
+eof_continue() { assert_contains eof_continue 'Target exited with status 7' && assert_contains eof_continue 'Signals forwarded: 0'; }
+eof_step() { assert_count eof_step 'After step:' 1 && assert_contains eof_step 'Interactive steps completed: 1' && assert_not_running eof_step; }
+eof_pending_inspect() {
+  assert_contains eof_pending_inspect 'Interactive signal stop: signal 4 pending' &&
+  assert_contains eof_pending_inspect 'steps=0 pending_signal=4' &&
+  assert_contains eof_pending_inspect 'Signals forwarded: 0' &&
+  assert_not_running eof_pending_inspect
+}
+eof_near_miss() { assert_count eof_near_miss 'Unknown session command. Type help.' 1 && assert_count eof_near_miss 'After step:' 0 && assert_not_running eof_near_miss; }
+eof_short_boundary() {
+  assert_count eof_short_boundary 'Unknown session command. Type help.' 1 &&
+  assert_count eof_short_boundary 'session command too long' 0 &&
+  assert_count eof_short_boundary 'After step:' 0 &&
+  assert_not_running eof_short_boundary
+}
+eof_full_boundary() {
+  assert_count eof_full_boundary 'session command too long' 1 &&
+  assert_count eof_full_boundary 'Unknown session command.' 0 &&
+  assert_count eof_full_boundary 'After step:' 0 &&
+  assert_not_running eof_full_boundary
+}
+eof_extra_space() {
+  assert_count eof_extra_space 'Unknown session command. Type help.' 1 &&
+  assert_count eof_extra_space 'Target exited with status 7' 0 &&
+  assert_not_running eof_extra_space
+}
+
+
 session_code() {
   assert_contains session_code 'Code word at RIP=0x' &&
   assert_contains session_code 'Target exited with status 42' &&
@@ -1465,6 +1509,30 @@ printf 'signals 2' > "$tmp/signal-tail-eof"
 printf 'g 1' > "$tmp/signal-tail-alias-eof"
 printf 'u\ng 1\nevents\nquit\n' > "$tmp/signal-tail-compact"
 
+# v0.2.15: all exact one-word commands work at EOF without trailing LF.
+printf 'regs' > "$tmp/eof-regs"
+printf 'r' > "$tmp/eof-regs-alias"
+printf 'status' > "$tmp/eof-status"
+printf 'i' > "$tmp/eof-status-alias"
+printf 'code' > "$tmp/eof-code"
+printf 'x' > "$tmp/eof-code-alias"
+printf 'stack' > "$tmp/eof-stack"
+printf 'k' > "$tmp/eof-stack-alias"
+printf 'bytes' > "$tmp/eof-bytes"
+printf 'b' > "$tmp/eof-bytes-alias"
+printf 'history' > "$tmp/eof-history"
+printf 'h' > "$tmp/eof-history-alias"
+printf 'help' > "$tmp/eof-help"
+printf 'quit' > "$tmp/eof-quit"
+printf 'continue' > "$tmp/eof-continue"
+printf 'step' > "$tmp/eof-step"
+printf 'step\nstatus' > "$tmp/eof-pending-inspect"
+printf 'stepper' > "$tmp/eof-near-miss"
+printf '%062d' 0 > "$tmp/eof-short-boundary"
+printf '%063d' 0 > "$tmp/eof-full-boundary"
+printf 'continue ' > "$tmp/eof-extra-space"
+
+
 # Resolve addresses from symbols in the native ELF fixtures.
 memory_base="$(nm -n "$ROOT/build/stack_words" | awk '$3 == "words" {print $1; exit}')"
 illegal_entry="$(nm -n "$ROOT/build/illegal" | awk '$3 == "_start" {print $1; exit}')"
@@ -1642,6 +1710,27 @@ check signal_tail_nonmutating 0 session_exec "$tmp/signal-tail-nonmutating" "$BI
 check signal_tail_eof 0 session_exec "$tmp/signal-tail-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check signal_tail_alias_eof 0 session_exec "$tmp/signal-tail-alias-eof" "$BIN" run --interactive "$ROOT/build/long_steps"
 check signal_tail_compact 0 session_exec "$tmp/signal-tail-compact" "$BIN" run --interactive --changes-only "$ROOT/build/illegal"
+check eof_regs 0 session_exec "$tmp/eof-regs" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_regs_alias 0 session_exec "$tmp/eof-regs-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_status 0 session_exec "$tmp/eof-status" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_status_alias 0 session_exec "$tmp/eof-status-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_code 0 session_exec "$tmp/eof-code" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_code_alias 0 session_exec "$tmp/eof-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_stack 0 session_exec "$tmp/eof-stack" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_stack_alias 0 session_exec "$tmp/eof-stack-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_bytes 0 session_exec "$tmp/eof-bytes" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_bytes_alias 0 session_exec "$tmp/eof-bytes-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_history 0 session_exec "$tmp/eof-history" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_history_alias 0 session_exec "$tmp/eof-history-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_help 0 session_exec "$tmp/eof-help" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_quit 0 session_exec "$tmp/eof-quit" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_continue 7 session_exec "$tmp/eof-continue" "$BIN" run --interactive "$ROOT/build/exit7"
+check eof_step 0 session_exec "$tmp/eof-step" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_pending_inspect 0 session_exec "$tmp/eof-pending-inspect" "$BIN" run --interactive "$ROOT/build/illegal"
+check eof_near_miss 0 session_exec "$tmp/eof-near-miss" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_short_boundary 0 session_exec "$tmp/eof-short-boundary" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_full_boundary 0 session_exec "$tmp/eof-full-boundary" "$BIN" run --interactive "$ROOT/build/long_steps"
+check eof_extra_space 0 session_exec "$tmp/eof-extra-space" "$BIN" run --interactive "$ROOT/build/exit7"
 check session_code 42 session_exec "$tmp/session-code" "$BIN" run --interactive "$ROOT/build/exit42"
 check session_code_alias 0 session_exec "$tmp/session-code-alias" "$BIN" run --interactive "$ROOT/build/long_steps"
 check session_code_all_ones 0 session_exec "$tmp/session-code-all-ones" "$BIN" run --interactive "$ROOT/build/all_ones"

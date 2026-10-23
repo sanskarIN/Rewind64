@@ -394,6 +394,22 @@ debug_run:
     call puts
     jmp .session_prompt
 .session_dispatch:
+    ; fgets returns a final short line without LF when stdin reaches EOF.
+    ; Normalize that terminator in-place so the existing exact command
+    ; table behaves identically for newline- and EOF-terminated commands.
+    ; The earlier overlong-line guard reserves space for both LF and NUL.
+    ; Never modify a newline-terminated input or create a second command.
+    lea rdi, [rbp+SESSION_BUFFER]
+    call strlen
+    test rax, rax
+    jz .session_dispatch_ready
+    cmp byte [rbp+SESSION_BUFFER+rax-1], 10
+    je .session_dispatch_ready
+    cmp rax, SESSION_BUF_SIZE - 1
+    jae .session_overlong
+    mov byte [rbp+SESSION_BUFFER+rax], 10
+    mov byte [rbp+SESSION_BUFFER+rax+1], 0
+.session_dispatch_ready:
     lea rdi, [rbp+SESSION_BUFFER]
     lea rsi, [rel cmd_step]
     call strcmp

@@ -1,5 +1,12 @@
 # Rewind64 development progress
 
+## v0.2.15 EOF-safe interactive command input — 2026-10-23 (development; unpublished)
+
+- New NASM input normalization handles one exact, EOF-terminated final command without an LF, while preserving the overlong-line drain and strict command/count matching. A genuinely empty EOF still stops and reaps the launched target.
+- Added 21 native Bash/Assembly regression cases for inspection, aliases, help/quit, step/continue, a pending SIGILL and unknown near-miss input. **243 total tests expected**, subject to Ubuntu 22.04/24.04 CI.
+- Upgraded v0.2.15 prerelease publishing workflow to require both supported Ubuntu test runners before releasing binaries and checksums. Also repeats the native suite during packaging.
+- Development is not published; v0.2.14 remains the latest verified experimental release, with no reverse execution, trace recording or process attach.
+
 ## v0.2.14 machine-readable capabilities — 2026-10-23 (experimental prerelease published)
 
 - **Published:** [v0.2.14](https://github.com/sanskarIN/Rewind64/releases/tag/v0.2.14) from merged [PR #24](https://github.com/sanskarIN/Rewind64/pull/24), after ten development commits with author/committer `sanskarin@outlook.in`.

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.15 — in development (experimental Linux x86-64)
+
+- Normalize a short, final EOF-terminated interactive command in the existing 64-byte NASM input buffer by inserting LF+NUL before exact-string dispatch. Newline-terminated commands are unchanged, and the overlong input guard still rejects and drains an unbounded line.
+- Exact no-newline commands now behave the same as newline-terminated `regs`, `status`, `code`, `stack`, `bytes`, `history`, `help`, `quit`, `step`, `continue` and short aliases. A genuinely empty EOF still terminates and reaps the target. Inspection never forwards pending signals.
+- Added **21** Python-free Bash/native NASM regressions for EOF commands, aliases, stopped SIGILL, normal continuation, valid step completion and near-miss rejection; expected suite **243** (222 existing + 21). CI validation pending.
+- The experimental prerelease publishing workflow now independently gates on **Ubuntu 22.04 and 24.04** native integration tests, with the publication job depending on both; packaging itself reruns the native suite.
+- Linux x86-64 single self-launched tracee, Boost Software License 1.0, forward-only. No Python, reverse debugger, tracing recording, replay or stable release claimed.
+
 ## v0.2.14 — 2026-10-23 (experimental Linux x86-64 prerelease)
 
 - Added target-free `rewind64 --capabilities` to print a **single static JSON document** for IDE/automation integrations, with schema version 1, Linux ptrace backend, supported execution modes, command limits and explicit unsupported-feature flags. It does not launch, attach, trace or inspect a program.
