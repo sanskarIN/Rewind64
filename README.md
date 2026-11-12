@@ -121,6 +121,7 @@ Maintainer: [sanskarIN on GitHub](https://github.com/sanskarIN). Updates: [devel
 
 Development support is voluntary; no donation is required to use or contribute to Rewind64.
 
+- [GitHub Sponsors](https://github.com/sponsors/sanskarIN) (monthly or one-time)
 - [Buy Me a Coffee](https://buymeacoffee.com/SanskarCodes)
 - [Razorpay](https://razorpay.me/@SanskarCodes)
 - [PayPal.me](https://paypal.me/SanskarCodes)
